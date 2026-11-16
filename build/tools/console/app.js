@@ -2126,7 +2126,7 @@
     body.vae = selectedVae();
     if ($("odeSolver").value !== "midpoint") body.solver = $("odeSolver").value;  // HERESY 1004
     if ($("narDecode").value === "ladder") body.nar_ladder = true;   // HERESY 1768: the decode ladder, experimental, the Creator's own
-    if ($("narLong").value === "pieces") body.nar_pieces = true;     // past one window the music runs on and the sound is joined; Whole sends nothing and is held to the window
+    body.nar_pieces = $("narLong").value === "pieces";   // Whole sends false, so an omitted field on /synth is not read as this choice. Left out, the engine joins only when the length is past one window
     if (STATE.sliderChoice.length) {
       body.sliders = slidersBody();             // HERESY 1166: with each one's curve, where it is not flat
     }

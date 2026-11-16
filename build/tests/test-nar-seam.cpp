@@ -212,6 +212,15 @@ int main() {
     check(!nar_reread_first_window(false, false, false, 4), "a sealed seam stays in the cache", "");
     check(nar_reread_first_window(true, false, false, 4), "a replay reads the window again", "");
 
+    // Left out follows the console. 9286 frames is one window at a 6000-token prefix; 12000 is the default 8:00.
+    check(nar_pieces_effective(false, false, 12000, 9286), "left out, eight minutes is joined", "");
+    check(!nar_pieces_effective(false, false, 4500, 9286), "left out, three minutes stays one window", "");
+    check(!nar_pieces_effective(false, false, 9286, 9286), "left out, a song that fills the window stays one window", "");
+    check(nar_pieces_effective(false, false, 9287, 9286), "left out, one frame past the window is joined", "");
+    check(!nar_pieces_effective(false, false, 10000, 11786), "left out, 400 s fits a short prefix", "");
+    check(!nar_pieces_effective(true, false, 12000, 9286), "an explicit false stays whole past the window", "");
+    check(nar_pieces_effective(true, true, 4500, 9286), "an explicit true is pieces even when the song fits", "");
+
     printf("%s\n", g_failed ? "FAILED" : "all cases hold");
     return g_failed ? 1 : 0;
 }

@@ -207,6 +207,22 @@ inline bool nar_reread_first_window(bool replay, bool sliders, bool ladder, int 
     return ladder && chunks > 1;
 }
 
+// What nar_pieces means once the request has been read.
+// Said (set): the caller's bool. true joins; false holds the music to one window.
+// Left out: the console's default. The asked length past one sound window is joined;
+// a length that fits stays one window. want_frames is the duration cap when it is
+// lower than the stage cap, else the stage cap. An old client that omits the field
+// and asks past the window is no longer cut there.
+inline bool nar_pieces_effective(bool set, bool value, int want_frames, int window_frames) {
+    if (set) {
+        return value;
+    }
+    if (window_frames < 1) {
+        return want_frames > 0;
+    }
+    return want_frames > window_frames;
+}
+
 inline float nar_seam_ramp(float u) {
     if (u <= 0.0f) {
         return 0.0f;

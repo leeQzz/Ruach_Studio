@@ -895,8 +895,9 @@ static bool seam_on() {
 
 // HERESY 2509: one window of the sound half for a song of this prompt: the context holds the prefix, the codes and their latent block
 // (two rows a frame). The model's own context is 24576 rows (about 6 to 7.8 minutes by the prefix); an Engine context set smaller for a
-// card's memory makes it shorter. A request without nar_pieces (Whole) holds the music half's budget to this window.
-// nar_pieces — the console's default once Max length is past the window — keeps that budget and joins the sound (nar-seam.h).
+// card's memory makes it shorter. A request that says nar_pieces false (Whole) holds the music half's budget to this window.
+// Left out, a length past the window keeps that budget and joins the sound, the same default as the console. An explicit
+// nar_pieces does the same (nar-seam.h).
 static int nar_window(int context, size_t prefix) {
     int window = (context - (int) prefix - 3) / 2;
 #ifdef YUE2_SEAM_TEST
@@ -908,7 +909,7 @@ static int nar_window(int context, size_t prefix) {
 }
 
 static bool pipeline_generate(Yue2Pipeline *          p,
-                              const Yue2Request &     r,
+                              Yue2Request &           r,
                               std::vector<Yue2Song> * songs,
                               bool (*cancelled)(void *) = nullptr,
                               void * cancel_data        = nullptr) {
@@ -1169,10 +1170,31 @@ static bool pipeline_generate(Yue2Pipeline *          p,
         }
     }
 
-    // HERESY 2509: whole by default: the music half's budget held to the shortest window of the batch, so no song needs pieces; the
-    // ladder (1768) and nar_pieces solve any length in pieces, and supplied codes are solved as they come
+    // HERESY 2509: a request that says nar_pieces false holds the music to the shortest window of the batch.
+    // Left out follows the console: past that window the music is not cut and the sound is joined. The ladder
+    // (1768) and an explicit nar_pieces solve any length in pieces, and supplied codes are solved as they come.
+    bool pieces = r.nar_pieces;
+    bool omitted_join = false;
+    if (!replay && !r.nar_ladder && !r.nar_pieces_set) {
+        int win = INT_MAX;
+        for (int i = 0; i < B; i++) {
+            win = std::min(win, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
+        }
+        win = std::max(win, 1);
+        int want = (int) (r.duration * (float) YUE2_FRAME_RATE);
+        if (want <= 0 || want > r.semantic_sampling.max_tokens) {
+            want = r.semantic_sampling.max_tokens;
+        }
+        pieces = nar_pieces_effective(false, false, want, win);
+        // The take's request.json is this object. Record the join, or a later reuse reads the omission as Whole and cuts the song.
+        if (pieces) {
+            omitted_join     = true;
+            r.nar_pieces     = true;
+            r.nar_pieces_set = true;
+        }
+    }
     int whole_cap = 0;
-    if (!replay && !r.nar_ladder && !r.nar_pieces) {
+    if (!replay && !r.nar_ladder && !pieces) {
         whole_cap = INT_MAX;
         for (int i = 0; i < B; i++) {
             whole_cap = std::min(whole_cap, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
@@ -1222,7 +1244,7 @@ static bool pipeline_generate(Yue2Pipeline *          p,
             if (semantic.min_tokens > semantic.max_tokens) {
                 semantic.min_tokens = semantic.max_tokens;
             }
-        } else if (whole_cap == 0 && (r.nar_pieces || r.nar_ladder)) {
+        } else if (whole_cap == 0 && (pieces || r.nar_ladder)) {
             // Pieces and the ladder keep the music budget (the requested length, else the stage's own cap).
             // One sound window is not allowed to cut it; the sound half joins what does not fit.
             int win = INT_MAX;
@@ -1230,8 +1252,13 @@ static bool pipeline_generate(Yue2Pipeline *          p,
                 win = std::min(win, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
             }
             if (win > 0 && win < INT_MAX && semantic.max_tokens > win) {
-                fprintf(stderr, "[AR] Frame budget stays %d (%.1f s): past one window of %d frames (%.1f s), solved in pieces, the music is not cut\n",
-                        semantic.max_tokens, (double) semantic.max_tokens / YUE2_FRAME_RATE, win, (double) win / YUE2_FRAME_RATE);
+                if (omitted_join) {
+                    fprintf(stderr, "[AR] nar_pieces was left out and the budget stays %d (%.1f s): past one window of %d frames (%.1f s), so the music is not cut (send false to stop at the window)\n",
+                            semantic.max_tokens, (double) semantic.max_tokens / YUE2_FRAME_RATE, win, (double) win / YUE2_FRAME_RATE);
+                } else {
+                    fprintf(stderr, "[AR] Frame budget stays %d (%.1f s): past one window of %d frames (%.1f s), solved in pieces, the music is not cut\n",
+                            semantic.max_tokens, (double) semantic.max_tokens / YUE2_FRAME_RATE, win, (double) win / YUE2_FRAME_RATE);
+                }
             }
         }
         // Local addition: the sliders steer the music tokens only, then leave

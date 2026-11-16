@@ -42,11 +42,16 @@ def call(path, body=None, timeout=60):
 @mcp.tool()
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
-                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True) -> dict:
+                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
+                  nar_pieces: bool | None = None) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
     lyrics: with section tags on their own lines ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
-    480; 0: 180, or the MIDI file's own length). instrumental: no voice. workspace: the Librarian's workspace it lands
+    480; 0: 180, or the MIDI file's own length). nar_pieces left out (the default): past one sound window, about 6 to
+    7¾ minutes at a full context, the music runs to that duration and the sound is joined; a shorter song stays one
+    window. true and false are forwarded (false stops the music at the window). An old caller that omits it and asks
+    past the window is no longer cut there; 180 seconds, the duration used when this argument's duration is 0, still
+    fits. instrumental: no voice. workspace: the Librarian's workspace it lands
     in. midi_file: a standard MIDI file on this machine whose notes become the song's melody (the top track sung, the
     second played, one line a voice); the answer's "score" says how the studio read it (key, tempo, notes kept and
     dropped). midi_key: the key to write it in (Em, Bb…) when the file has none and the studio's guess would not do.
@@ -68,6 +73,8 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
         body["music_seed"] = music_seed
     if sound_seed is not None:
         body["sound_seed"] = sound_seed
+    if nar_pieces is not None:                          # left out: the API leaves it out, and /synth applies the window default
+        body["nar_pieces"] = nar_pieces
     job = call("/songs", body)
     if not wait or "job" not in job:
         return job

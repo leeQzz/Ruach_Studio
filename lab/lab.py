@@ -2268,6 +2268,17 @@ def debuzz_async(name, source="", strength=0.8, period=1920, rate=48000):
     if not (256 <= period <= 16384 and 8000 <= rate <= 192000):
         raise ValueError("period or rate out of range")
     d = take_dir(name)
+    # The engine's default cure already replaced audio.wav and kept audio.raw.wav. Running this on the take
+    # again would cure the cleaned file. A source (the raw file, or one made from the take) is still a first cure of that file.
+    if not source:
+        import debuzz as debuzz_mod
+        try:
+            meta = json.load(open(d / "meta.json", encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = {}
+        if debuzz_mod.already_debuzzed(meta, source):
+            return {"status": "done", "idempotent": True, "debuzzed": True,
+                    "note": "already debuzzed; audio.wav is the cleaned take and audio.raw.wav is the decoder's"}
     audio, tag = source_of(name, source)
     if not audio:
         raise FileNotFoundError(f"{name} has no audio")
@@ -2667,6 +2678,10 @@ def chain_async(name, spec):
                     continue
                 if k == "debuzz":
                     r = debuzz_async(name, src, st["strength"], spec.get("period") or 1920, spec.get("rate") or 48000)
+                    if r.get("idempotent"):
+                        st["status"] = "done"
+                        st["file"] = src or "audio.wav"
+                        continue
                     _follow(r, f"debuzz:{name}:{r['id']}")
                     src = _first_file(d, r["id"])
                 elif k == "upscale":
@@ -4205,8 +4220,9 @@ class Handler(BaseHTTPRequestHandler):
                 except (ValueError, FileNotFoundError) as e:
                     return self.send(404, {"error": str(e)})
             if url.path == "/debuzz":
-                return self.send(202, debuzz_async(q.get("name", ""), q.get("source", ""), q.get("strength", "0.8"),
-                                                   q.get("period", "1920"), q.get("rate", "48000")))
+                r = debuzz_async(q.get("name", ""), q.get("source", ""), q.get("strength", "0.8"),
+                                 q.get("period", "1920"), q.get("rate", "48000"))
+                return self.send(200 if r.get("idempotent") else 202, r)
             if url.path == "/textend":
                 r = textend_async(q.get("name", ""), q.get("force") == "1", q.get("cached") == "1")
                 return self.send(500 if r.get("status") == "failed" else 202 if r.get("status") else 200, r)

@@ -134,8 +134,9 @@ struct Yue2Request {
     int   instrumental;  // -1
     bool  free_tempo;  // HERESY 1416: the music stage reads the score without its tempo (Q: lines and [Q:…] fields)
     bool  nar_ladder;  // HERESY 1768: the sound half in even pieces of about 20 s, each hearing 2 s past its edges (experimental)
-    bool  nar_pieces;  // HERESY 2509: a song longer than one window of the sound half sung on and solved in pieces (2352's seam, experimental);
-                       // false: the song is held to one window, whole
+    bool  nar_pieces;  // HERESY 2509: a song longer than one window of the sound half sung on and solved in pieces (2352's seam);
+                       // false, and the request said so: the song is held to one window, whole
+    bool  nar_pieces_set;  // the request said nar_pieces, true or false. Left out is not a false: the pipeline joins when the asked length is past one window
     int   vocal_octave;  // HERESY 1743: a score the model plans whole has its Vocal line moved by this many octaves before it is sung (−3…3; 0: as planned)
 
     // output normalization percentile control, the peak being the
@@ -144,6 +145,11 @@ struct Yue2Request {
 
     // audio output format: "mp3", "wav16", "wav24", "wav32"
     std::string output_format;
+
+    // The VAE's 25 Hz frame buzz out of the highs once the take is saved (lab/debuzz.py, strength 0.8).
+    // true: audio.wav and listen.flac are the cleaned take; audio.raw.wav keeps the decoder's peak-whole file.
+    // false: the take stays as the decoder wrote it. WAV only; an MP3 is left as encoded.
+    bool debuzz;  // true
 
     // MP3 encoder bitrate in kbps, used when output_format is "mp3".
     // WAV outputs ignore this field.

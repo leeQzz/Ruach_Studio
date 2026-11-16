@@ -37,7 +37,8 @@ void request_init(Yue2Request * r) {
     r->cfg_lyrics       = -1.0f;   // HERESY 1397
     r->free_tempo       = false;   // HERESY 1416
     r->nar_ladder       = false;   // HERESY 1768
-    r->nar_pieces       = false;   // HERESY 2509
+    r->nar_pieces       = false;   // HERESY 2509: false until the request says, or the pipeline joins a length past one window
+    r->nar_pieces_set   = false;   // left out: decided from the duration and the real window, not held whole
     r->vocal_octave     = 0;       // HERESY 1743
     r->score_planned    = false;   // HERESY 1618
     r->instrumental     = -1;      // HERESY 2153: not said
@@ -52,6 +53,7 @@ void request_init(Yue2Request * r) {
     r->semantic_sampling = YUE2_SEMANTIC_SAMPLING;
 
     r->output_format = OUTPUT_FORMAT_WAV24;   // HERESY 1413 (Viktor 13.10.2026: «Дефолт движка везде выставь на wav 24bit»)
+    r->debuzz        = true;   // the 25 Hz frame buzz out of a WAV take; false keeps the decoder's peak-whole file
     r->mp3_bitrate   = 128;
 
     // Local additions (console): take title, decoder, sliders, LoRAs, score-only runs, parent take
@@ -342,8 +344,9 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     if ((v = yyjson_obj_get(obj, "nar_ladder")) && yyjson_is_bool(v)) {   // HERESY 1768
         r->nar_ladder = yyjson_get_bool(v);
     }
-    if ((v = yyjson_obj_get(obj, "nar_pieces")) && yyjson_is_bool(v)) {   // HERESY 2509
-        r->nar_pieces = yyjson_get_bool(v);
+    if ((v = yyjson_obj_get(obj, "nar_pieces")) && yyjson_is_bool(v)) {   // HERESY 2509: said, either way; left out stays unset
+        r->nar_pieces     = yyjson_get_bool(v);
+        r->nar_pieces_set = true;
     }
     if ((v = yyjson_obj_get(obj, "vocal_octave")) && yyjson_is_num(v)) {   // HERESY 1743: whole octaves, three at most either way
         int o           = (int) yyjson_get_num(v);
@@ -351,6 +354,9 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     }
     if ((v = yyjson_obj_get(obj, "output_format")) && yyjson_is_str(v)) {
         r->output_format = yy_str(v);
+    }
+    if ((v = yyjson_obj_get(obj, "debuzz")) && yyjson_is_bool(v)) {
+        r->debuzz = yyjson_get_bool(v);
     }
     if ((v = yyjson_obj_get(obj, "mp3_bitrate")) && yyjson_is_int(v)) {
         r->mp3_bitrate = yyjson_get_int(v);
@@ -573,7 +579,9 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
     if (r->nar_ladder) {   // HERESY 1768: written only when used
         yyjson_mut_obj_add_bool(doc, root, "nar_ladder", true);
     }
-    if (r->nar_pieces) {   // HERESY 2509: written only when used
+    if (r->nar_pieces_set) {   // HERESY 2509: a said false stays false, so a saved Whole is not joined again
+        yyjson_mut_obj_add_bool(doc, root, "nar_pieces", r->nar_pieces);
+    } else if (r->nar_pieces) {
         yyjson_mut_obj_add_bool(doc, root, "nar_pieces", true);
     }
     if (r->vocal_octave != 0) {   // HERESY 1743: written only when used
@@ -581,6 +589,9 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
     }
     if (!sparse || r->output_format != d.output_format) {
         yyjson_mut_obj_add_strncpy(doc, root, "output_format", r->output_format.c_str(), r->output_format.size());
+    }
+    if (!sparse || r->debuzz != d.debuzz) {
+        yyjson_mut_obj_add_bool(doc, root, "debuzz", r->debuzz);
     }
     if (!sparse || r->peak_clip != d.peak_clip) {
         yyjson_mut_obj_add_int(doc, root, "peak_clip", r->peak_clip);

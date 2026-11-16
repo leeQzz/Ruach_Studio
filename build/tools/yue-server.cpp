@@ -47,6 +47,10 @@
 #endif
 
 #ifdef _WIN32
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
 #    include <fcntl.h>
 #    include <io.h>
 #    include <sys/stat.h>   // HERESY 2083b: _S_IREAD, _S_IWRITE for a file written whole
@@ -55,6 +59,7 @@
 #    endif
 #else
 #    include <fcntl.h>      // HERESY 2083b: open() for a file written whole and synced
+#    include <sys/wait.h>   // a debuzz child this thread can stop when the job is cancelled
 #    include <unistd.h>
 #endif
 
@@ -129,7 +134,8 @@ static const char * MULTIPART_BOUNDARY = "yue2-batch-boundary";
 static std::string multipart_build_tracks(const std::vector<std::string> &        request_parts,
                                           const std::vector<std::string> &        audio_parts,
                                           const char *                            audio_mime,
-                                          const std::vector<std::vector<float>> & latents) {
+                                          const std::vector<std::vector<float>> & latents,
+                                          const std::vector<std::string> &        raw_parts = {}) {
     // One set of literal fragments sizes the body exactly and builds it:
     // audio parts weigh tens of MB, growing the string through repeated
     // appends would reallocate and copy them
@@ -139,6 +145,11 @@ static std::string multipart_build_tracks(const std::vector<std::string> &      
     const char * latent_head =
         "\r\nContent-Type: application/octet-stream\r\n"
         "Content-Disposition: form-data; name=\"latent\"\r\n\r\n";
+    // No library: the decoder's peak-whole WAV rides after the cleaned part, named raw, so a client can keep it.
+    // An empty string means this track was not cleaned (off, MP3, failure, cancel) and the audio part is the original.
+    const char * raw_head =
+        "\r\nContent-Type: audio/wav\r\n"
+        "Content-Disposition: form-data; name=\"raw\"\r\n\r\n";
     const char * head_end  = "\r\n\r\n";
     const char * crlf      = "\r\n";
     const char * close_end = "--\r\n";
@@ -149,6 +160,9 @@ static std::string multipart_build_tracks(const std::vector<std::string> &      
     size_t total = strlen(dash) + boundary_len + strlen(close_end);
     for (size_t i = 0; i < audio_parts.size(); i++) {
         total += per_track + request_parts[i].size() + audio_parts[i].size() + latents[i].size() * sizeof(float);
+        if (i < raw_parts.size() && !raw_parts[i].empty()) {
+            total += strlen(dash) + boundary_len + strlen(raw_head) + raw_parts[i].size() + strlen(crlf);
+        }
     }
 
     std::string body;
@@ -166,6 +180,13 @@ static std::string multipart_build_tracks(const std::vector<std::string> &      
         body += head_end;
         body += audio_parts[i];
         body += crlf;
+        if (i < raw_parts.size() && !raw_parts[i].empty()) {
+            body += dash;
+            body += MULTIPART_BOUNDARY;
+            body += raw_head;
+            body += raw_parts[i];
+            body += crlf;
+        }
         body += dash;
         body += MULTIPART_BOUNDARY;
         body += latent_head;
@@ -1452,6 +1473,362 @@ static void take_title_lyrics(const std::string & dir, const std::string & name,
     }
 }
 
+// A shell word. The paths are the server's own (the take folder, lab/debuzz.py); quoting keeps a space in them a space.
+static std::string shell_quote(const std::string & s) {
+#ifdef _WIN32
+    std::string o = "\"";
+    for (char c : s) {
+        if (c == '"') {
+            o += "\\\"";
+        } else {
+            o += c;
+        }
+    }
+    return o + "\"";
+#else
+    std::string o = "'";
+    for (char c : s) {
+        if (c == '\'') {
+            o += "'\\''";
+        } else {
+            o += c;
+        }
+    }
+    return o + "'";
+#endif
+}
+
+// lab/debuzz.py, beside this process or above its working directory (start.sh runs the engine from the repo root).
+// RUACH_DEBUZZ names the script when it lives somewhere else.
+static std::string debuzz_script() {
+    if (const char * env = getenv("RUACH_DEBUZZ")) {
+        if (*env && std::filesystem::is_regular_file(env)) {
+            return env;
+        }
+    }
+    std::error_code          ec;
+    std::filesystem::path    cwd = std::filesystem::current_path(ec);
+    for (int i = 0; i < 6 && !cwd.empty(); i++) {
+        std::filesystem::path p = cwd / "lab" / "debuzz.py";
+        if (std::filesystem::is_regular_file(p, ec)) {
+            return p.string();
+        }
+        std::filesystem::path parent = cwd.parent_path();
+        if (parent == cwd) {
+            break;
+        }
+        cwd = parent;
+    }
+    return "";
+}
+
+// The Studio's venv when it sits next to lab/ (start.sh: $ROOT/.venv/bin/python, else python3). RUACH_PYTHON wins.
+static std::string python_for(const std::string & script) {
+    if (const char * e = getenv("RUACH_PYTHON")) {
+        if (*e) {
+            return e;
+        }
+    }
+    if (const char * e = getenv("YUE2_PYTHON")) {
+        if (*e) {
+            return e;
+        }
+    }
+    std::filesystem::path root = std::filesystem::path(script).parent_path().parent_path();
+#ifdef _WIN32
+    std::filesystem::path venv = root / ".venv" / "Scripts" / "python.exe";
+    if (std::filesystem::is_regular_file(venv)) {
+        return venv.string();
+    }
+    return "python";
+#else
+    std::filesystem::path venv = root / ".venv" / "bin" / "python";
+    if (std::filesystem::is_regular_file(venv)) {
+        return venv.string();
+    }
+    return "python3";
+#endif
+}
+
+// One bool and optional strings on meta.json. The library list copies meta, so the page sees them.
+static void meta_debuzz(const std::string & dir, bool done, const char * raw, const char * note) {
+    std::string  path = dir + "/meta.json";
+    std::string  text = read_file(path);
+    yyjson_doc * meta = yyjson_read(text.c_str(), text.size(), 0);
+    if (!meta) {
+        return;
+    }
+    yyjson_mut_doc * doc  = yyjson_doc_mut_copy(meta, NULL);
+    yyjson_mut_val * root = yyjson_mut_doc_get_root(doc);
+    yyjson_doc_free(meta);
+    yyjson_mut_obj_remove_key(root, "debuzzed");
+    yyjson_mut_obj_add_bool(doc, root, "debuzzed", done);
+    yyjson_mut_obj_remove_key(root, "raw");
+    yyjson_mut_obj_remove_key(root, "debuzz_note");
+    if (raw && *raw) {
+        yyjson_mut_obj_add_strcpy(doc, root, "raw", raw);
+    }
+    if (note && *note) {
+        yyjson_mut_obj_add_strcpy(doc, root, "debuzz_note", note);
+    }
+    char * json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY, NULL);
+    if (json) {
+        write_file_synced(path, json);
+        free(json);
+    }
+    yyjson_mut_doc_free(doc);
+}
+
+// std::system would sit until the child left, so a cancel during a long debuzz never reached the flag.
+// The child is its own process group; cancel terminates that group and the take stays as it was saved.
+static int run_cancellable(const std::string & cmd, const std::atomic<bool> * cancel) {
+#ifdef _WIN32
+    std::string         line = "cmd.exe /d /c " + cmd;
+    std::vector<char>   mutable_cmd(line.begin(), line.end());
+    mutable_cmd.push_back('\0');
+    STARTUPINFOA        si;
+    PROCESS_INFORMATION pi;
+    memset(&si, 0, sizeof(si));
+    memset(&pi, 0, sizeof(pi));
+    si.cb = sizeof(si);
+    if (!CreateProcessA(nullptr, mutable_cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        return -1;
+    }
+    while (WaitForSingleObject(pi.hProcess, 50) == WAIT_TIMEOUT) {
+        if (cancel && cancel->load()) {
+            TerminateProcess(pi.hProcess, 1);
+            break;
+        }
+    }
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return code == 0 ? 0 : (int) code;
+#else
+    pid_t pid = fork();
+    if (pid < 0) {
+        return -1;
+    }
+    if (pid == 0) {
+        setpgid(0, 0);
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char *) nullptr);
+        _exit(127);
+    }
+    setpgid(pid, pid);
+    int status = 0;
+    for (;;) {
+        pid_t got = waitpid(pid, &status, WNOHANG);
+        if (got == pid) {
+            break;
+        }
+        if (got < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        if (cancel && cancel->load()) {
+            kill(-pid, SIGTERM);
+            for (int i = 0; i < 40; i++) {
+                got = waitpid(pid, &status, WNOHANG);
+                if (got == pid) {
+                    return 1;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            }
+            kill(-pid, SIGKILL);
+            waitpid(pid, &status, 0);
+            return 1;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    return 1;
+#endif
+}
+
+static const char * debuzz_subtype(const Yue2Request & replay) {
+    if (replay.output_format == "wav16") {
+        return "PCM_16";
+    }
+    if (replay.output_format == "wav32") {
+        return "FLOAT";   // raw float: debuzz.py does not bring the whole file down to 0.999
+    }
+    return "PCM_24";
+}
+
+static std::string debuzz_command(const std::string & script, const std::string & wav, const std::string & out, const char * subtype) {
+    return shell_quote(python_for(script)) + " " + shell_quote(script) + " " + shell_quote(wav) + " " + shell_quote(out) +
+           " 0.8 2000 50 3 " + std::to_string(YUE2_HOP) + " " + std::to_string(YUE2_SAMPLE_RATE) + " " + subtype + " 1>&2";
+}
+
+// After library_save: a WAV take is debuzzed in place when the request asks (the default). The decoder's
+// peak-whole file stays as audio.raw.wav. The cleaned WAV replaces audio.wav and listen.flac, and is
+// returned so the job's own result matches the file. Empty: the take was left as saved (off, MP3, cancel,
+// or the cure could not run). The library lock is held only around the swap, not across the Python run.
+// Cancel, whether the flag was already set or the child was stopped, writes the same record: debuzzed false,
+// note cancel, the decoder file left in place. A later variation of the same job gets that same record and
+// is not cured. An MP3 is never cured; its note is mp3, not cancel, so the card does not say the buzz left.
+static void mark_debuzz_cancel(const std::string & name) {
+    if (name.empty() || g_outputs_dir.empty()) {
+        return;
+    }
+    meta_debuzz(g_outputs_dir + "/" + name, false, "", "cancel");
+}
+
+static std::string library_debuzz(const std::string & name, const Yue2Request & replay, bool is_mp3, const std::atomic<bool> * cancel) {
+    if (!replay.debuzz) {
+        return "";
+    }
+    std::string dir = g_outputs_dir + "/" + name;
+    if (is_mp3) {
+        fprintf(stderr, "[Library] %s: debuzz left off (an MP3 is already encoded; a WAV keeps the raw file beside the cleaned one)\n",
+                name.c_str());
+        meta_debuzz(dir, false, "", "mp3");
+        return "";
+    }
+    if (cancel && cancel->load()) {
+        fprintf(stderr, "[Library] %s: debuzz cancelled before it started; the take stays as the decoder wrote it\n", name.c_str());
+        mark_debuzz_cancel(name);
+        return "";
+    }
+    std::string script = debuzz_script();
+    if (script.empty()) {
+        fprintf(stderr, "[Library] %s: debuzz skipped, lab/debuzz.py not found (set RUACH_DEBUZZ)\n", name.c_str());
+        meta_debuzz(dir, false, "", "no script");
+        return "";
+    }
+    std::string wav = dir + "/audio.wav";
+    std::string raw = dir + "/audio.raw.wav";
+    std::string tmp = dir + "/audio.debuzz.wav";
+    const char * sub = debuzz_subtype(replay);
+    std::string  cmd = debuzz_command(script, wav, tmp, sub);
+    fprintf(stderr, "[Library] %s: debuzz\n", name.c_str());
+    int             rc = run_cancellable(cmd, cancel);
+    std::error_code ec;
+    auto            sz = std::filesystem::is_regular_file(tmp, ec) ? std::filesystem::file_size(tmp, ec) : 0;
+    if (cancel && cancel->load()) {
+        std::filesystem::remove(tmp, ec);
+        fprintf(stderr, "[Library] %s: debuzz cancelled; the take stays as the decoder wrote it\n", name.c_str());
+        meta_debuzz(dir, false, "", "cancel");
+        return "";
+    }
+    if (rc != 0 || ec || sz < 64) {
+        std::filesystem::remove(tmp, ec);
+        fprintf(stderr, "[Library] %s: debuzz failed (%d); the take stays as the decoder wrote it\n", name.c_str(), rc);
+        meta_debuzz(dir, false, "", "failed");
+        return "";
+    }
+    std::string cleaned;
+    {
+        std::lock_guard<std::mutex> lock(mtx_library);
+        std::filesystem::remove(raw, ec);   // a previous raw, if a save is tried again; missing is not a failure
+        ec.clear();
+        std::filesystem::rename(wav, raw, ec);
+        if (ec) {
+            std::string why = ec.message();
+            std::filesystem::remove(tmp, ec);
+            fprintf(stderr, "[Library] %s: debuzz could not keep the raw wav: %s\n", name.c_str(), why.c_str());
+            meta_debuzz(dir, false, "", "raw");
+            return "";
+        }
+        ec.clear();
+        std::filesystem::rename(tmp, wav, ec);
+        if (ec) {
+            std::error_code back;
+            std::filesystem::rename(raw, wav, back);
+            fprintf(stderr, "[Library] %s: debuzz could not replace the wav; %s\n", name.c_str(),
+                    back ? "the raw file could not be put back" : "the raw file is back");
+            meta_debuzz(dir, false, "", "replace");
+            return "";
+        }
+        cleaned = read_file(wav);
+        std::string title, lyrics;
+        take_title_lyrics(dir, name, title, lyrics);
+        write_listen_flac(dir, cleaned, title, lyrics);
+        meta_debuzz(dir, true, "audio.raw.wav", "");
+    }
+    fprintf(stderr, "[Library] %s: debuzzed, raw kept as audio.raw.wav\n", name.c_str());
+    return cleaned;
+}
+
+// No take folder (the server was started without --outputs, or this track could not be saved): the same cure
+// on the WAV the job returns. The decoder's bytes are kept by the caller (a raw part of the result) when the
+// cure replaces them. A failure or a cancel returns empty and the caller leaves the decoder bytes as the audio.
+static std::string debuzz_loose(const std::string & wav, const Yue2Request & replay, const std::atomic<bool> * cancel) {
+    if (!replay.debuzz || (cancel && cancel->load())) {
+        return "";
+    }
+    std::string script = debuzz_script();
+    if (script.empty()) {
+        fprintf(stderr, "[Library] debuzz skipped, lab/debuzz.py not found (set RUACH_DEBUZZ)\n");
+        return "";
+    }
+    std::error_code ec;
+    std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / ("ruach-debuzz-" + job_make_id());
+    if (ec || !std::filesystem::create_directory(dir, ec)) {
+        fprintf(stderr, "[Library] debuzz could not make a temporary directory\n");
+        return "";
+    }
+    std::string in  = (dir / "in.wav").string();
+    std::string out = (dir / "out.wav").string();
+    std::string cleaned;
+    if (write_file(in, wav)) {
+        fprintf(stderr, "[Library] debuzz (no take folder)\n");
+        int  rc = run_cancellable(debuzz_command(script, in, out, debuzz_subtype(replay)), cancel);
+        auto sz = std::filesystem::is_regular_file(out, ec) ? std::filesystem::file_size(out, ec) : 0;
+        if (cancel && cancel->load()) {
+            fprintf(stderr, "[Library] debuzz cancelled\n");
+        } else if (rc == 0 && !ec && sz >= 64) {
+            cleaned = read_file(out);
+        } else {
+            fprintf(stderr, "[Library] debuzz failed (%d); the result stays as the decoder wrote it\n", rc);
+        }
+    }
+    std::filesystem::remove_all(dir, ec);
+    return cleaned;
+}
+
+// The saved take when there is one, otherwise the WAV in the job result. False only when this track's cure
+// was cancelled: the audio argument is still the decoder's file, and a saved take is marked note cancel.
+// A cure that finished returns true even if the flag flipped as it ended, so that take stays debuzzed true.
+// raw_kept, when set, receives the decoder bytes of a loose (no library) track the cure replaced.
+static bool debuzz_result(std::string & audio, const std::string & saved_as, const Yue2Request & replay, bool is_mp3,
+                          const std::atomic<bool> * cancel, std::string * raw_kept) {
+    if (raw_kept) {
+        raw_kept->clear();
+    }
+    if (is_mp3) {
+        if (replay.debuzz && !saved_as.empty()) {
+            library_debuzz(saved_as, replay, true, cancel);   // debuzzed false, note mp3; never a cleaned file
+        }
+        return !(cancel && cancel->load());
+    }
+    if (!replay.debuzz) {
+        return !(cancel && cancel->load());
+    }
+    if (cancel && cancel->load()) {
+        mark_debuzz_cancel(saved_as);
+        return false;
+    }
+    std::string cleaned = !saved_as.empty() ? library_debuzz(saved_as, replay, false, cancel) : debuzz_loose(audio, replay, cancel);
+    if (!cleaned.empty()) {
+        if (raw_kept && saved_as.empty()) {
+            *raw_kept = audio;   // the decoder's peak-whole file, beside the cleaned one in the result
+        }
+        audio = std::move(cleaned);
+        return true;
+    }
+    if (cancel && cancel->load()) {
+        mark_debuzz_cancel(saved_as);
+        return false;
+    }
+    return true;
+}
+
 // Local addition: saved copies are named after the song ("Last Train Home.wav"): the title without the
 // characters Windows refuses in a file name, an ASCII fallback for old clients and the full name in UTF-8.
 // by_title false (the page's "names=library") keeps the library name, with its date and time.
@@ -1530,7 +1907,7 @@ static std::string job_status_json(const Job & job) {
         yyjson_mut_obj_add_sint(doc, root, "lm_seed", job.lm_seed);
         yyjson_mut_obj_add_sint(doc, root, "seed", job.seed);
     }
-    if (status == JobStatus::DONE) {
+    if (status == JobStatus::DONE || (status == JobStatus::CANCELLED && !job.takes.empty())) {
         yyjson_mut_val * list = yyjson_mut_arr(doc);
         for (const auto & t : job.takes) {
             yyjson_mut_arr_add_strcpy(doc, list, t.c_str());
@@ -1553,6 +1930,9 @@ static std::string job_status_json(const Job & job) {
         if (job.window_held > 0.0) {   // HERESY 2509
             yyjson_mut_obj_add_real(doc, root, "window_held", std::round(job.window_held * 10.0) / 10.0);
         }
+    }
+    if (status == JobStatus::CANCELLED && job.takes.empty() && job.made > 0) {
+        yyjson_mut_obj_add_int(doc, root, "made", job.made);   // no library: the result still holds the tracks
     }
     if (status == JobStatus::FAILED && !job.error.empty()) {
         yyjson_mut_obj_add_strncpy(doc, root, "error", job.error.c_str(), job.error.size());
@@ -2515,17 +2895,33 @@ static void decode_job(std::shared_ptr<Job> job, const Yue2Request & request) {
     }
     std::vector<std::string> request_parts = { request_to_json(&replay) };
     std::vector<std::string> audio_parts   = { audio };
+    std::string              saved;
     if (!g_outputs_dir.empty()) {
-        std::string name = library_save(replay, audio, is_mp3, song, 0, 1, 0, 0, !request.abc.empty() && !request.score_planned, render_seconds,
-                                        &job->library_error);
-        if (!name.empty()) {
-            job->takes.push_back(name);
-            latents_save(g_outputs_dir + "/" + name, song);
+        saved = library_save(replay, audio, is_mp3, song, 0, 1, 0, 0, !request.abc.empty() && !request.score_planned, render_seconds,
+                             &job->library_error);
+        if (!saved.empty()) {
+            job->takes.push_back(saved);
+            latents_save(g_outputs_dir + "/" + saved, song);
         }
     }
+    std::string raw;
+    if (!debuzz_result(audio_parts[0], saved, replay, is_mp3, &job->cancel, &raw)) {
+        job->made = 1;
+        std::vector<std::string> raw_parts;
+        raw_parts.push_back(std::move(raw));
+        job->result_body = multipart_build_tracks(request_parts, audio_parts, is_mp3 ? "audio/mpeg" : "audio/wav",
+                                                  std::vector<std::vector<float>>{ song.latents }, raw_parts);
+        job->result_mime = MULTIPART_MIME;
+        active_job_set(nullptr);
+        job->status.store(JobStatus::CANCELLED);
+        results_trim();
+        return;
+    }
     active_job_set(nullptr);
+    std::vector<std::string> raw_parts;
+    raw_parts.push_back(std::move(raw));
     job->result_body = multipart_build_tracks(request_parts, audio_parts, is_mp3 ? "audio/mpeg" : "audio/wav",
-                                              std::vector<std::vector<float>>{ song.latents });   // upstream 1603: a latent part per track
+                                              std::vector<std::vector<float>>{ song.latents }, raw_parts);   // upstream 1603: a latent part per track
     job->result_mime = MULTIPART_MIME;
     job->made        = 1;
     job->status.store(JobStatus::DONE);
@@ -2709,7 +3105,9 @@ static void run_job(std::shared_ptr<Job> job, Yue2Request request) {
     const int                       M = request.synth_batch_size;
     std::vector<std::string>        audio_parts;
     std::vector<std::string>        request_parts;
+    std::vector<std::string>        raw_parts;
     std::vector<std::vector<float>> latents;
+    bool                            debuzz_stopped = false;
     for (size_t t = 0; t < songs.size(); t++) {
         Yue2Song & song = songs[t];
         audio_soft_start(song.audio, song.T_audio);   // HERESY 2091: the whole song decoded from its start, kept part and new alike
@@ -2737,22 +3135,43 @@ static void run_job(std::shared_ptr<Job> job, Yue2Request request) {
                                             pipeline_format_tokens(song.tokens), (int) t / M, (int) t % M);
         request_parts.push_back(request_to_json(&replay));
         // Local addition: every track lands in the library as it is encoded
+        std::string saved;
         if (!g_outputs_dir.empty()) {
-            std::string name = library_save(replay, audio_parts.back(), is_mp3, song, (int) t, (int) songs.size(),
-                                            (int) t / M, (int) t % M, !request.abc.empty() && !request.score_planned, render_seconds,
-                                            &job->library_error);
-            if (!name.empty()) {
-                job->takes.push_back(name);
-                latents_save(g_outputs_dir + "/" + name, song);   // HERESY 1168: for another decoder, in seconds
+            saved = library_save(replay, audio_parts.back(), is_mp3, song, (int) t, (int) songs.size(),
+                                 (int) t / M, (int) t % M, !request.abc.empty() && !request.score_planned, render_seconds,
+                                 &job->library_error);
+            if (!saved.empty()) {
+                job->takes.push_back(saved);
+                latents_save(g_outputs_dir + "/" + saved, song);   // HERESY 1168: for another decoder, in seconds
             }
         }
+        // Cancel stops the cure and does not cure a later variation. Every variation is still saved, and each
+        // one that did not finish the cure is marked the same way (debuzzed false, note cancel). One that
+        // finished stays debuzzed true. The job is cancelled only after the rest are saved, and it names them.
+        std::string raw;
+        if (debuzz_stopped || job->cancel.load()) {
+            debuzz_stopped = true;
+            if (!saved.empty() && replay.debuzz && !is_mp3) {
+                mark_debuzz_cancel(saved);
+            } else if (!saved.empty() && is_mp3 && replay.debuzz) {
+                meta_debuzz(g_outputs_dir + "/" + saved, false, "", "mp3");
+            }
+        } else if (!debuzz_result(audio_parts.back(), saved, replay, is_mp3, &job->cancel, &raw)) {
+            debuzz_stopped = true;
+        }
+        raw_parts.push_back(std::move(raw));
         latents.push_back(std::move(song.latents));
     }
 
     active_job_set(nullptr);
-    job->result_body = multipart_build_tracks(request_parts, audio_parts, is_mp3 ? "audio/mpeg" : "audio/wav", latents);
-    job->result_mime = MULTIPART_MIME;
     job->made        = (int) audio_parts.size();
+    job->result_body = multipart_build_tracks(request_parts, audio_parts, is_mp3 ? "audio/mpeg" : "audio/wav", latents, raw_parts);
+    job->result_mime = MULTIPART_MIME;
+    if (debuzz_stopped) {
+        job->status.store(JobStatus::CANCELLED);
+        results_trim();
+        return;
+    }
     job->status.store(JobStatus::DONE);
     results_trim();
 }
@@ -3425,7 +3844,7 @@ int main(int argc, char ** argv) {
             res.set_content(job_status_json(*job), "application/json");
             return;
         }
-        if (status != JobStatus::DONE) {
+        if (status != JobStatus::DONE && !(status == JobStatus::CANCELLED && !job->result_body.empty())) {
             res.status = 404;
             res.set_content(json_string("error", "result not ready"), "application/json");
             return;
@@ -3587,7 +4006,18 @@ int main(int argc, char ** argv) {
                 res.set_content(json_string("error", "no such take"), "application/json");
                 return;
             }
-            std::string path = audio_file_of(g_outputs_dir + "/" + name);
+            std::string dir  = g_outputs_dir + "/" + name;
+            std::string path = audio_file_of(dir);
+            // debuzz on: audio.wav is the cleaned take; audio.raw.wav is the decoder's peak-whole file
+            if (req.get_param_value("raw") == "1") {
+                std::string kept = dir + "/audio.raw.wav";
+                if (!std::filesystem::is_regular_file(kept)) {
+                    res.status = 404;
+                    res.set_content(json_string("error", "this take has no raw file (debuzz was off, or it is an MP3)"), "application/json");
+                    return;
+                }
+                path = kept;
+            }
             bool        mp3  = path.size() > 4 && path.substr(path.size() - 4) == ".mp3";
             // Saved copies are named after the song, or the library name with names=library (local change)
             res.set_header("Content-Disposition", download_header("inline", g_outputs_dir + "/" + name, name, mp3 ? ".mp3" : ".wav",

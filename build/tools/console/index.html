@@ -1452,6 +1452,10 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
                       <option value="wav32">WAV 32-bit float</option>
                       <option value="mp3">MP3</option>
                     </select></label>
+                  <div class="field" data-tip="YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.">
+                    <span class="label">Frame buzz</span>
+                    <label class="check"><input type="checkbox" id="debuzz" checked /> <span>Take the 25 Hz buzz out</span></label>
+                  </div>
                   <label class="field" id="bitrateField"><span class="label" data-head="kbps">MP3 bitrate</span>
                     <select id="mp3Bitrate">
                       <option value="96">96</option><option value="128">128</option><option value="160">160</option>
@@ -1465,11 +1469,11 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
                       <option value="standard" selected>Whole song · standard</option>
                       <option value="ladder">Ladder · experimental</option>
                     </select></label>
-                  <!-- HERESY 2509 (Viktor 12.11.2026: «И кусковая генерация песен по рецепту из репо Тимона, я бы её сделал опцией для реально длинных песен, и то, экспериментальной, а не дефолтной как сейчас»): whole by default, held to one window of the sound half; 2352's pieces a choice -->
+                  <!-- Long songs: Whole keeps one sound window and stops the music there. Pieces (the default once Max length is past that window, after test-nar-seam) runs the music to Max length and joins the sound. -->
                   <label class="field"><span class="label" data-head="past one window">Long songs</span>
-                    <select id="narLong" data-tip="Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.">
-                      <option value="whole" selected>Whole · up to one window</option>
-                      <option value="pieces">Pieces · experimental</option>
+                    <select id="narLong" data-tip="Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.">
+                      <option value="whole">Whole · one window</option>
+                      <option value="pieces">Pieces · joined</option>
                     </select></label>
                 </div>
                 <div class="field-row">
@@ -3041,6 +3045,7 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
     <dt>WAV 32</dt><dd>raw float, no normalisation</dd>
     <dt>MP3</dt><dd>small files; the server's own default</dd>
     <dt>Peak clip</dt><dd>none any more: the song is written at the decoder's own level, never raised and never cut (turned down only when a peak would pass full scale in 16 or 24 bits); an MP3 alone is normalized; loudness is the master's work, in the Refiner</dd>
+    <dt>Frame buzz</dt><dd>on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take</dd>
   </dl>
 </template>
 <template id="tip-versions">

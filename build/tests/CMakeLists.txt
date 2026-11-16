@@ -57,3 +57,7 @@ target_include_directories(test-score-guard PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(test-prompt test-prompt.cpp ${CMAKE_SOURCE_DIR}/src/request.cpp)
 target_include_directories(test-prompt PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test-prompt PRIVATE yyjson)
+
+# Local addition: test-nar-seam, the long-song join (piece plan and crossfade), pure CPU, no model.
+add_executable(test-nar-seam test-nar-seam.cpp)
+target_include_directories(test-nar-seam PRIVATE ${CMAKE_SOURCE_DIR}/src)

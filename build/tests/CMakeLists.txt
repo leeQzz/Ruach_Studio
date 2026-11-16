@@ -52,3 +52,7 @@ target_include_directories(test-notation PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # Local addition: test-score-guard, the score guard (HERESY 1087) and its key-line warning (HERESY 2433), pure CPU, no model.
 add_executable(test-score-guard test-score-guard.cpp)
 target_include_directories(test-score-guard PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Local addition: test-nar-seam, the long-song join (piece plan and crossfade), pure CPU, no model.
+add_executable(test-nar-seam test-nar-seam.cpp)
+target_include_directories(test-nar-seam PRIVATE ${CMAKE_SOURCE_DIR}/src)

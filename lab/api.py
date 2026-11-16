@@ -148,6 +148,11 @@ def openapi():
     song = {"style": s, "lyrics": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
             "instrumental": b, "duration": {"type": "number"}, "min_seconds": {"type": "number"}, "music_seed": i, "sound_seed": i, "abc": s, "loras": a,
             "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]}}
+    song["nar_pieces"] = {"type": "boolean",
+                          "description": "Left out: the same default as the console. Past one sound window (about 6 to 7¾ minutes "
+                                         "at a full context; the engine uses the real prefix) the music runs to duration and the sound "
+                                         "is joined. A length that fits stays one window. true joins even when it fits (one chunk when "
+                                         "it does). false holds the music to one window. Anything other than true or false is 400."}
     return {"openapi": "3.1.0",
             "info": {"title": "Ruach Studio API", "version": VERSION,
                      "description": "Songs from words on this machine. Private networks only; a token when RUACH_API_TOKEN is set."},
@@ -268,6 +273,12 @@ def handle(method, path, query, body, headers, ctx):
                 col.fresh_parts(col.load(ctx["config_dir"]()), ws)
             except ValueError as e:
                 return 400, {"error": f"workspace: {e}"}
+        # Left out: do not invent a bool here. /synth joins when the duration is past one real sound window, and stays
+        # whole when it fits. true and false are forwarded as said, so an explicit Whole is not joined.
+        if "nar_pieces" in data:
+            if not isinstance(data["nar_pieces"], bool):
+                return 400, {"error": "nar_pieces is true or false"}
+            req["nar_pieces"] = data["nar_pieces"]
         job = _engine("/synth", req)
         jid = job.get("id")
         if data.get("workspace") and jid is not None:

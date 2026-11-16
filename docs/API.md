@@ -53,7 +53,13 @@ POST /api/v1/songs
 - `abc`: your own score, in YuE2's two-voice dialect (what the Creator's score drawer holds).
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
-- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
+- `nar_pieces`: the long-song choice, the same one as the console's Long songs.
+  - Left out: the engine decides from the real prefix. When `duration` is past one sound window (about 6 to 7¾ minutes at a full context, less with a long score or a smaller Engine context), the music runs to that duration and the sound is joined. When it fits, the song stays one window. The API's own default duration, 180 seconds, fits, so an old client that omits both fields is unchanged.
+  - `false`: Whole. The music stops at one window, even when `duration` is longer. This is what the console sends when Whole is selected.
+  - `true`: Pieces. The music is not cut at the window. A song that fits is still one chunk.
+  - Anything other than `true` or `false` is `400`.
+  - An old client of `POST /synth`, `/api/v1/songs`, or the MCP tool that omits the field and asks for a length past one window (the engine's own default duration is 8:00) is no longer cut there. To keep that cut, send `false`. A saved `request.json` that does not contain the field is decided again the same way; one that contains `false` stays Whole.
+- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise). `nar_pieces` is passed on only when the request says it.
 - `workspace`: the take lands there when it is done.
 
 ### A melody as a MIDI file

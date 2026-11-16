@@ -1461,11 +1461,11 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
                       <option value="standard" selected>Whole song · standard</option>
                       <option value="ladder">Ladder · experimental</option>
                     </select></label>
-                  <!-- HERESY 2509 (Viktor 12.11.2026: «И кусковая генерация песен по рецепту из репо Тимона, я бы её сделал опцией для реально длинных песен, и то, экспериментальной, а не дефолтной как сейчас»): whole by default, held to one window of the sound half; 2352's pieces a choice -->
+                  <!-- Long songs: Whole keeps one sound window and stops the music there. Pieces (the default once Max length is past that window, after test-nar-seam) runs the music to Max length and joins the sound. -->
                   <label class="field"><span class="label" data-head="past one window">Long songs</span>
-                    <select id="narLong" data-tip="Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.">
-                      <option value="whole" selected>Whole · up to one window</option>
-                      <option value="pieces">Pieces · experimental</option>
+                    <select id="narLong" data-tip="Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.">
+                      <option value="whole">Whole · one window</option>
+                      <option value="pieces">Pieces · joined</option>
                     </select></label>
                 </div>
                 <div class="field-row">

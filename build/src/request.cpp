@@ -36,7 +36,8 @@ void request_init(Yue2Request * r) {
     r->cfg_lyrics       = -1.0f;   // HERESY 1397
     r->free_tempo       = false;   // HERESY 1416
     r->nar_ladder       = false;   // HERESY 1768
-    r->nar_pieces       = false;   // HERESY 2509
+    r->nar_pieces       = false;   // HERESY 2509: false until the request says, or the pipeline joins a length past one window
+    r->nar_pieces_set   = false;   // left out: decided from the duration and the real window, not held whole
     r->vocal_octave     = 0;       // HERESY 1743
     r->score_planned    = false;   // HERESY 1618
     r->instrumental     = -1;      // HERESY 2153: not said
@@ -335,8 +336,9 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     if ((v = yyjson_obj_get(obj, "nar_ladder")) && yyjson_is_bool(v)) {   // HERESY 1768
         r->nar_ladder = yyjson_get_bool(v);
     }
-    if ((v = yyjson_obj_get(obj, "nar_pieces")) && yyjson_is_bool(v)) {   // HERESY 2509
-        r->nar_pieces = yyjson_get_bool(v);
+    if ((v = yyjson_obj_get(obj, "nar_pieces")) && yyjson_is_bool(v)) {   // HERESY 2509: said, either way; left out stays unset
+        r->nar_pieces     = yyjson_get_bool(v);
+        r->nar_pieces_set = true;
     }
     if ((v = yyjson_obj_get(obj, "vocal_octave")) && yyjson_is_num(v)) {   // HERESY 1743: whole octaves, three at most either way
         int o           = (int) yyjson_get_num(v);
@@ -563,7 +565,9 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
     if (r->nar_ladder) {   // HERESY 1768: written only when used
         yyjson_mut_obj_add_bool(doc, root, "nar_ladder", true);
     }
-    if (r->nar_pieces) {   // HERESY 2509: written only when used
+    if (r->nar_pieces_set) {   // HERESY 2509: a said false stays false, so a saved Whole is not joined again
+        yyjson_mut_obj_add_bool(doc, root, "nar_pieces", r->nar_pieces);
+    } else if (r->nar_pieces) {
         yyjson_mut_obj_add_bool(doc, root, "nar_pieces", true);
     }
     if (r->vocal_octave != 0) {   // HERESY 1743: written only when used

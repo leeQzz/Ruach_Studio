@@ -9384,3 +9384,11 @@ RuachI18n.add("el", {
 RuachI18n.add("el", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "Το VAE με το οποίο αποκωδικοποιείται ένα τραγούδι όταν το αίτημά του δεν ορίζει κανένα (αποθηκευμένα prompts, άλλοι πελάτες). Τα κουμπιά VAE στη φόρμα το επιλέγουν για κάθε τραγούδι, και ένα έτοιμο τραγούδι μπορεί να πάρει άλλο από τη σελίδα του."
 });
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("el", {
+"Exclude styles": "Εξαίρεση στυλ",
+"drones, beats, drums…": "drones, beats, drums…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Τι δεν πρέπει να έχει το τραγούδι. Το άνευ όρων πέρασμα της καθοδήγησης κουβαλά αυτά τα στυλ αντί για ένα κενό στυλ, και το τραγούδι απομακρύνεται από αυτά. Άδειο, αυτό το πέρασμα μένει όπως ήταν."
+});

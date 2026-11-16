@@ -1118,6 +1118,10 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
               <button type="button" class="btn ghost small" id="keyToScore"></button>
               <button type="button" class="btn ghost small" id="keyToStyle"></button></span>
           </label>
+          <label class="field exclude-field" data-fold="exclude">
+            <span class="label">Exclude styles</span>
+            <textarea id="excludeStyles" rows="2" data-max-rows="6" maxlength="2000" spellcheck="false" placeholder="drones, beats, drums…" data-tip="What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is."></textarea>
+          </label>
           <!-- HERESY 1032: saved styles, kept on Forge (heresy-presets.js) -->
           <div class="lib-row" id="styleLibRow">
             <select id="styleLib" aria-label="Saved styles" data-tip="Your saved styles, kept on Forge: picking one puts it in the Style box (it asks before replacing what is there)."><option value="">Saved styles…</option></select>

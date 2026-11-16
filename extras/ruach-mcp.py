@@ -42,9 +42,12 @@ def call(path, body=None, timeout=60):
 @mcp.tool()
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
-                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True) -> dict:
+                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
+                  exclude_styles: str = "") -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
-    lyrics: with section tags on their own lines ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
+    exclude_styles: what the song must not have (drones, beats, drums). The guidance's unconditional pass carries
+    these instead of an empty style. Empty leaves that pass as it is. lyrics: with section tags on their own lines
+    ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
     480; 0: 180, or the MIDI file's own length). instrumental: no voice. workspace: the Librarian's workspace it lands
     in. midi_file: a standard MIDI file on this machine whose notes become the song's melody (the top track sung, the
@@ -53,6 +56,8 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
     job_status."""
     body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental}
+    if str(exclude_styles or "").strip():
+        body["exclude_styles"] = str(exclude_styles).strip()
     if mode:
         body["mode"] = mode
     if midi_file:                                       # HERESY 1145

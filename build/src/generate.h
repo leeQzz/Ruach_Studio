@@ -182,7 +182,10 @@ static bool yue2_generate(Qwen3LM *                             lm,
             if (owed[i] < 0) {
                 const float * cond   = batched.data() + (size_t) i * rows;
                 const float * logits = cond;
-                if (split) {                     // HERESY 1397: the style's pull and the lyrics' pull, each at its own scale
+                if (split) {                     // HERESY 1397: the style's pull and the lyrics' pull, each at its own scale.
+                    // uncond is the instruction alone, or the excluded styles in [Tags] with empty lyrics
+                    // (prompt.h). styled stays the requested style without lyrics, so this split still
+                    // separates the style's pull from the lyrics' pull when styles are excluded.
                     const float * uncond = batched.data() + (size_t) (B + i) * rows;
                     const float * styled = batched.data() + (size_t) (2 * B + i) * rows;
                     for (int k = 0; k < rows; k++) {

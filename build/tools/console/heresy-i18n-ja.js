@@ -9264,3 +9264,11 @@ RuachI18n.add("ja", {
 RuachI18n.add("ja", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "曲のリクエストが VAE を指定していないときに、その曲のデコードに使う VAE（保存したプロンプト、他のクライアント）。フォームの VAE ボタンで曲ごとに選べます。完成した曲はそのページから別の VAE に変えられます。"
 });
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("ja", {
+"Exclude styles": "除外するスタイル",
+"drones, beats, drums…": "ドローン、ビート、ドラム…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "曲にあってはならないもの。ガイダンスの無条件パスが、空のスタイルの代わりにこれらのスタイルを運び、曲はそれらから押し離される。空なら、そのパスはこれまでどおり。"
+});

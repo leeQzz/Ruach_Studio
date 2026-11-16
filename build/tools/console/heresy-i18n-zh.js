@@ -9264,3 +9264,11 @@ RuachI18n.add("zh", {
 RuachI18n.add("zh", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "当歌曲的请求没有指定 VAE 时，用来解码它的 VAE（已保存的提示词、其他客户端）。表单中的 VAE 按钮按每首歌选择，已完成的歌曲可在其页面换用另一个。"
 });
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("zh", {
+"Exclude styles": "排除风格",
+"drones, beats, drums…": "持续音、节拍、鼓…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "这首歌不该有的东西。引导的无条件分支带着这些风格，而不是空风格，从而把歌曲从它们推开。留空则该分支保持原样。"
+});

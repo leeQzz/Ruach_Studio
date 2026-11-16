@@ -52,3 +52,8 @@ target_include_directories(test-notation PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # Local addition: test-score-guard, the score guard (HERESY 1087) and its key-line warning (HERESY 2433), pure CPU, no model.
 add_executable(test-score-guard test-score-guard.cpp)
 target_include_directories(test-score-guard PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+# Local addition: test-prompt, exclude styles on the unconditional CFG stream, pure CPU, no model.
+add_executable(test-prompt test-prompt.cpp ${CMAKE_SOURCE_DIR}/src/request.cpp)
+target_include_directories(test-prompt PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-prompt PRIVATE yyjson)

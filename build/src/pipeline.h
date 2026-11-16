@@ -1163,12 +1163,19 @@ static bool pipeline_generate(Yue2Pipeline *          p,
         fprintf(stderr, "[Prompt] guidance %.2f for the music, %.2f for the lyrics: a third branch without the lyrics\n", (double) guidance,
                 (double) lyrics_guidance);
     }
+    std::string                   excluded = yue2_style_line(r.exclude_styles);
     std::vector<std::vector<int>> negatives;
     if (guidance != 1.0f || split) {
         negatives.resize(B);
         for (int i = 0; i < B; i++) {
-            negatives[i] = yue2_build_negative_ids(encode, cot, has_score ? &abc_ids[i] : nullptr);
+            negatives[i] = yue2_build_negative_ids(encode, cot, has_score ? &abc_ids[i] : nullptr, excluded);
         }
+        if (!excluded.empty()) {
+            std::string preview = excluded.size() > 120 ? excluded.substr(0, 117) + "..." : excluded;
+            fprintf(stderr, "[Prompt] unconditional branch carries excluded styles: %s\n", preview.c_str());
+        }
+    } else if (!excluded.empty()) {
+        fprintf(stderr, "[Prompt] exclude styles ignored: guidance 1.0 keeps a single branch\n");
     }
 
     // HERESY 2509: whole by default: the music half's budget held to the shortest window of the batch, so no song needs pieces; the

@@ -1764,7 +1764,7 @@
     $("newSong").click();
   });
   function newSong() {
-    ["title", "titleVersion", "style", "lyrics", "abc", "lmSeed", "soundSeed", "cfg", "cfgLyrics"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too   // HERESY 1397
+    ["title", "titleVersion", "style", "excludeStyles", "lyrics", "abc", "lmSeed", "soundSeed", "cfg", "cfgLyrics"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too   // HERESY 1397
     $("cfgLyrics").value = LYRICS_CFG;                   // HERESY 1400: a new song starts with the two apart
     setCot("full");                                   // HERESY 1169 · 1253 (Viktor 08.10.2026: «Full as the default»; 1167 had Direct)
     $("instrumental").checked = false;
@@ -1803,9 +1803,9 @@
   // lyrics, the score), the seeds and loaded music codes with them; the machine stays as set: mode, sampling, guidance,
   // sliders, LoRAs, Instrumental, VAE and output. New song puts the machine back to its defaults too.
   function clearWords() {
-    ["title", "titleVersion", "style", "lyrics", "abc", "lmSeed", "soundSeed"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too
+    ["title", "titleVersion", "style", "excludeStyles", "lyrics", "abc", "lmSeed", "soundSeed"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too
     setCodes(null);
-    ["style", "lyrics", "abc"].forEach(function (id) { $(id).dispatchEvent(new Event("input", { bubbles: true })); });
+    ["style", "excludeStyles", "lyrics", "abc"].forEach(function (id) { $(id).dispatchEvent(new Event("input", { bubbles: true })); });
     $("scoreDrawer").open = false;
     growLyrics();
     paintDice();
@@ -2000,11 +2000,13 @@
     // (loose, HERESY 1032: the form read as it stands, for a saved profile, with no checks on the texts)
     if (abc && cot === "off" && !instrumental && !loose) throw new Error("Direct mode ignores a supplied score — pick full or melody");
     var style = styleOneLine($("style").value), lyrics = $("lyrics").value;   // HERESY 1421
+    var exclude = styleOneLine($("excludeStyles") ? $("excludeStyles").value : "");
     if (!style && !lyrics.trim() && !STATE.codes && !loose) throw new Error("Write a style prompt or lyrics first");
     // HERESY 2462: a title typed that the names' rule refuses is said, and nothing is sent (its field offers the cleaned one when left)
     var typedTitle = cleanTitle(fullTitle()).text, titleWhy = !loose && typedTitle && window.HeresyNames ? window.HeresyNames.refusal(typedTitle, { max: TITLE_MAX }) : "";
     if (titleWhy) throw new Error(titleWhy);
     var body = { title: songTitle(), style: style, lyrics: lyrics, cot: cot };
+    if (exclude) body.exclude_styles = exclude;   // the unconditional CFG pass; empty leaves it as the instruction alone
     if (abc) body.abc = abc;
     var lm = readSeed("lmSeed", "Music seed"), sound = readSeed("soundSeed", "Sound seed");
     if (lm !== null) body.lm_seed = lm;
@@ -2662,6 +2664,7 @@
     keepForm("before");                                // HERESY 1596: a take's or a recipe's words over the form: the form as it was kept
     setTitle(opts.title !== undefined ? opts.title : String(req.title || ""));   // HERESY 1614: «Name vN.N» into its two fields
     $("style").value = String(req.style || "");
+    if ($("excludeStyles")) $("excludeStyles").value = String(req.exclude_styles || "");
     $("lyrics").value = String(req.lyrics || "");
     $("abc").value = String(req.abc || "");
     if (req.abc) $("scoreDrawer").open = true;
@@ -2745,7 +2748,7 @@
   // prompt file does not come into the form as written is said when it opens. A file that loads «clean» but lost a field, a
   // mode or an adapter on the way lies; each such place says what was there and what the form holds instead.
   // HERESY 1607, 1609: harmony and abc_continue among a prompt file's keys
-  var PROMPT_KEYS = ["title", "style", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
+  var PROMPT_KEYS = ["title", "style", "exclude_styles", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
     "vae", "solver", "nar_ladder", "nar_pieces", "sliders", "loras", "lora_groups", "plan_only", "semantic_tokens", "semantic_keep", "parent", "duration", "steps",
     "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "score_guard", "seconds", "instrumental"];
   var GROUP_NAMES = { abc: "Score planner", semantic: "Music tokens" };
@@ -6348,6 +6351,7 @@
       $("abc").value = req.abc || "";
       if (!fromSound && req.abc && !scoreFrom()) scoreWrittenBy(req.loras || [], "its take");   // HERESY 1327
       $("style").value = take.style;
+      if ($("excludeStyles")) $("excludeStyles").value = String((!fromSound && req.exclude_styles) || "");
       $("lyrics").value = take.lyrics;
       var tp = splitTitle(displayTitle(take)); setTitleParts(tp.name + " (edit)", tp.version);   // HERESY 1614
       if (MODES[cot] && cot !== "off") setCot(cot);
@@ -12154,7 +12158,7 @@
   var DRAFT_KEY = "yue2.draft", draftTimer = null;
   function draftSnapshot() {
     var req = {
-      title: fullTitle(), style: $("style").value, lyrics: $("lyrics").value, abc: $("abc").value,   // HERESY 1614: with its version
+      title: fullTitle(), style: $("style").value, exclude_styles: $("excludeStyles") ? $("excludeStyles").value : "", lyrics: $("lyrics").value, abc: $("abc").value,   // HERESY 1614: with its version
       lm_seed: $("lmSeed").value.trim(), seed: $("soundSeed").value.trim(), cot: currentCot(),
       cfg_scale: $("cfg").dataset.touched && $("cfg").value.trim() !== "" ? parseFloat($("cfg").value) : -1,
       cfg_lyrics: $("cfgLyrics").value.trim() !== "" ? parseFloat($("cfgLyrics").value) : -1,   // HERESY 1397

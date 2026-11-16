@@ -48,6 +48,7 @@ POST /api/v1/songs
 ```
 
 - `mode`: `direct` (fastest), `full` (a score first: melody and chords, then the song), `melody`. With a score of your own (`abc`, or a MIDI file) and no mode, the score's kind picks it: `full` when it has chord symbols, `melody` when not. `direct` with a score is refused (`400`): direct makes the music without one, and the score would be dropped.
+- `exclude_styles`: what the song must not have (`drones, beats, drums`). The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Left out or empty, that pass stays the instruction alone. Lines are joined into one, as in the Creator. Longer than 8000 characters is refused.
 - `instrumental: true` makes it without a voice (the lyrics are then left out).
 - `music_seed`, `sound_seed`: to make a take again; left out, both are random.
 - `abc`: your own score, in YuE2's two-voice dialect (what the Creator's score drawer holds).

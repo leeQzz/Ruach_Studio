@@ -9385,3 +9385,11 @@ RuachI18n.add("ru", {
 RuachI18n.add("ru", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "VAE, которым декодируется песня, когда её запрос не называет никакого (сохранённые промпты, другие клиенты). Кнопки VAE в форме выбирают его для каждой песни, а готовой песне можно дать другой с её страницы."
 });
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("ru", {
+"Exclude styles": "Исключить стили",
+"drones, beats, drums…": "дроны, биты, барабаны…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Чего в песне быть не должно. Безусловный проход ведения несёт эти стили вместо пустого, и песню от них отталкивает. Пусто — этот проход остаётся как был."
+});

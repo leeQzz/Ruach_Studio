@@ -4,7 +4,7 @@ addresses only, HERESY 1114). One door for a script, a DAW, an agent: the engine
     GET  /api/v1                          what this is, and every route
     GET  /api/v1/openapi.json             the same as OpenAPI 3.1
     GET  /api/v1/health                   the engine, the lab, the cards (the guard's verdict)
-    POST /api/v1/songs                    make a song: {style, lyrics, title, mode, duration, min_seconds, abc | midi_b64, …} -> {job}
+    POST /api/v1/songs                    make a song: {style, lyrics, exclude_styles, title, mode, duration, min_seconds, abc | midi_b64, …} -> {job}
     POST /api/v1/score/from-midi          a MIDI file as a song's score, to see first: {midi_b64, key, ins} -> {abc, key, …}
     GET  /api/v1/jobs/ID                  its state; when done, the takes it made
     POST /api/v1/jobs/ID/cancel
@@ -37,6 +37,21 @@ STUDIO = (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip(
 ENGINE = f"http://127.0.0.1:{os.environ.get('YUE2CPP_PORT', '7777')}"
 MODES = {"direct": "off", "off": "off", "full": "full", "melody": "melody"}
 INSTRUMENTAL = "[Intro]\n\n[Verse]\n\n[Outro]\n"
+EXCLUDE_MAX = 8000
+
+
+def _style_line(text):
+    """One style line, as the page joins a box and the engine's yue2_style_line does."""
+    acc = ""
+    for line in str(text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if not acc:
+            acc = line
+        else:
+            acc += (" " if acc[-1] in ",;.:!?" else ", ") + line
+    return acc
 
 
 class Redirect(Exception):
@@ -145,7 +160,7 @@ def openapi():
             o["parameters"] = [{"name": n, "in": w, "required": w == "path", "schema": {"type": t}} for n, w, t in params]
         return o
     s, i, b, a = {"type": "string"}, {"type": "integer"}, {"type": "boolean"}, {"type": "array"}
-    song = {"style": s, "lyrics": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
+    song = {"style": s, "lyrics": s, "exclude_styles": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
             "instrumental": b, "duration": {"type": "number"}, "min_seconds": {"type": "number"}, "music_seed": i, "sound_seed": i, "abc": s, "loras": a,
             "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]}}
     return {"openapi": "3.1.0",
@@ -247,9 +262,14 @@ def handle(method, path, query, body, headers, ctx):
             return 400, {"error": "direct makes the music without a score, and this one would be dropped: "
                                   "mode melody (a score without chord symbols) or full (with them)"}
         lyrics = INSTRUMENTAL if data.get("instrumental") else str(data.get("lyrics") or "")
+        exclude = _style_line(data.get("exclude_styles") or "")
+        if len(exclude) > EXCLUDE_MAX:
+            return 400, {"error": "exclude_styles is longer than 8000 characters"}
         duration = data.get("duration") or (math.ceil(score["seconds"]) if score else 180)
         req = {"style": style, "lyrics": lyrics, "cot": mode, "title": str(data.get("title") or "")[:120],
                "duration": float(duration)}
+        if exclude:                                  # the unconditional CFG pass; empty leaves the instruction alone
+            req["exclude_styles"] = exclude
         for k_in, k_out in (("music_seed", "lm_seed"), ("sound_seed", "seed")):
             if data.get(k_in) is not None:
                 req[k_out] = int(data[k_in])
@@ -307,6 +327,8 @@ def handle(method, path, query, body, headers, ctx):
             row = next((r for r in col.catalog(outputs, cfg())["takes"] if r["name"] == name), {})
             req = json.load(open(d / "request.json", encoding="utf-8")) if (d / "request.json").is_file() else {}
             made = {k: req.get(k) for k in ("style", "lyrics", "abc", "cot", "duration", "lm_seed", "seed", "loras", "vae", "steps", "solver")}
+            if req.get("exclude_styles"):               # an older take has no such field
+                made["exclude_styles"] = req["exclude_styles"]
             art = ctx["art"]["info"](name) if ctx.get("art") else None
             return 200, dict(_row(row), request=made, audio=f"/api/v1/takes/{name}/audio",
                              artwork=f"/api/v1/takes/{name}/artwork" if art else None)

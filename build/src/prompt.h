@@ -8,7 +8,10 @@
 // picks the instruction and decides who writes the score: an empty score slot
 // hands the pen to the model, provided ABC ids place a composition of ours.
 // The unconditional CFG stream keeps the instruction alone and drops the
-// style and the lyrics, so guidance pulls toward the requested text.
+// style and the lyrics, so guidance pulls toward the requested text. An
+// exclude-styles line fills that empty style instead: the same [Tags] slot,
+// lyrics still empty, so guidance pushes away from those styles. A blank
+// exclude leaves the instruction-only stream as it was.
 #pragma once
 
 #include <string>
@@ -75,6 +78,43 @@ static std::string yue2_request_text(Yue2Cot cot, const std::string & style, con
     return std::string(yue2_instruction(cot)) + "\n[Tags]\n" + style + "\n[Lyrics]\n" + lyrics + "\n";
 }
 
+// One style line, the way the page joins a box: each line trimmed, blanks
+// dropped, the next line after a comma unless the previous already ends on
+// punctuation. A blank box comes back empty.
+static std::string yue2_style_line(const std::string & text) {
+    std::string acc;
+    size_t      i = 0, n = text.size();
+    while (i < n) {
+        size_t j = i;
+        while (j < n && text[j] != '\n') {
+            j++;
+        }
+        size_t a = i, b = j;
+        if (b > a && text[b - 1] == '\r') {
+            b--;
+        }
+        while (a < b && (text[a] == ' ' || text[a] == '\t')) {
+            a++;
+        }
+        while (b > a && (text[b - 1] == ' ' || text[b - 1] == '\t')) {
+            b--;
+        }
+        if (a < b) {
+            if (!acc.empty()) {
+                char last  = acc.back();
+                bool punct = last == ',' || last == ';' || last == '.' || last == ':' || last == '!' || last == '?';
+                acc += punct ? " " : ", ";
+            }
+            acc.append(text, a, b - a);
+        }
+        if (j < n) {
+            j++;
+        }
+        i = j;
+    }
+    return acc;
+}
+
 // Assembles the conditional token stream. A null abc_ids in melody or full mode
 // stops at ABC_START, which is the prefix the score generation starts from;
 // pass the exact ids it produced to reach MUSIC_START.
@@ -106,14 +146,22 @@ static std::vector<int> yue2_build_prompt_ids(Tokenize                 bpe_encod
     return ids;
 }
 
-// Assembles the unconditional token stream: the instruction alone, then the
-// same score. In off mode the score slot is absent entirely, unlike the
-// conditional stream which carries an empty one.
+// Assembles the unconditional token stream. With no exclude styles: the
+// instruction alone, then the same score. With exclude styles: that line in
+// the [Tags] slot and an empty [Lyrics], the same text frame as a lyricless
+// positive prompt, so guidance pushes the style away from those words. In
+// off mode the score slot is absent entirely, unlike the conditional stream
+// which carries an empty one, whether or not styles are excluded.
 template <typename Tokenize>
-static std::vector<int> yue2_build_negative_ids(Tokenize bpe_encode, Yue2Cot cot, const std::vector<int> * abc_ids) {
+static std::vector<int> yue2_build_negative_ids(Tokenize                 bpe_encode,
+                                                Yue2Cot                  cot,
+                                                const std::vector<int> * abc_ids,
+                                                const std::string &      exclude = "") {
+    std::string      line = yue2_style_line(exclude);
     std::vector<int> ids;
     ids.push_back(YUE2_EOD);
-    for (int id : bpe_encode(std::string(yue2_instruction(cot)))) {
+    const std::string body = line.empty() ? std::string(yue2_instruction(cot)) : yue2_request_text(cot, line, "");
+    for (int id : bpe_encode(body)) {
         ids.push_back(id);
     }
     if (cot == YUE2_COT_OFF) {

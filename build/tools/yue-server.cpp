@@ -2257,6 +2257,14 @@ static bool validate(const std::string & json, httplib::Response & res, Yue2Requ
         res.set_content(json_string("error", "cot must be full, melody or off"), "application/json");
         return false;
     }
+    // /synth reads exclude_styles with the rest of the body (request_parse_json). It rides the
+    // unconditional CFG pass; a blank field leaves that pass as the instruction alone. The page
+    // caps the box at 2000; the API may send a longer list, not a document.
+    if (r->exclude_styles.size() > 8000) {
+        res.status = 400;
+        res.set_content(json_string("error", "exclude_styles is longer than 8000 characters"), "application/json");
+        return false;
+    }
     bool      is_mp3  = false;
     WavFormat wav_fmt = WAV_S16;
     if (!audio_parse_format(r->output_format.c_str(), is_mp3, wav_fmt)) {

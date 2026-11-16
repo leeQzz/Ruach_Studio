@@ -54,7 +54,7 @@ POST /api/v1/songs
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
 - Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
-- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is. Anything other than `true` or `false` is `400`.
+- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is. A WAV32 (float) keeps the level the cure left, including a peak above full scale; 16- and 24-bit come down to 0.999 only when a peak would not fit. With no library (`--outputs` unset) the job's WAV is still cleaned, and there is no raw file beside it. Cancelling the job stops the cure. Anything other than `true` or `false` is `400`.
 - `workspace`: the take lands there when it is done.
 
 ### A melody as a MIDI file

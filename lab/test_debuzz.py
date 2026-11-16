@@ -88,6 +88,20 @@ with tempfile.TemporaryDirectory() as tmp:
     check("the locked ripple loses more buzz than that band", (before - after) > (plain_before - plain_after) + 2,
           (round(before - after, 2), round(plain_before - plain_after, 2)))
 
+    loud = stereo(buzzed)
+    loud *= 1.8 / np.max(np.abs(loud))
+    sf.write(src, loud.astype(np.float32), SR, subtype="FLOAT")
+    float_report = debuzz.debuzz_file(src, dst, subtype="FLOAT")
+    yf, _ = sf.read(dst, dtype="float64", always_2d=True)
+    peak_f = float(np.max(np.abs(yf)))
+    check("a WAV32 keeps a peak above full scale", peak_f > 1.2 and float_report["scaled_db"] == 0.0,
+          (round(peak_f, 3), float_report["scaled_db"]))
+    pcm_report = debuzz.debuzz_file(src, dst, subtype="PCM_24")
+    yp, _ = sf.read(dst, dtype="float64", always_2d=True)
+    peak_p = float(np.max(np.abs(yp)))
+    check("a PCM take still comes down under full scale", peak_p <= 0.9995 and pcm_report["scaled_db"] < 0,
+          (round(peak_p, 4), pcm_report["scaled_db"]))
+
     # the engine's invocation: the same argv the server builds, one JSON line on stdout
     import subprocess
     cli = subprocess.run([sys.executable, str(ROOT / "lab" / "debuzz.py"), str(src), str(tmp / "cli.wav"),
@@ -145,6 +159,8 @@ check("start.sh queues YuE2-VAE-RS x3 v1 (then v2) ahead of standard", 0 <= rs_a
 check("the engine's default decoder is the first --vae", "the first is the default" in server and 'default_vae' in server)
 check("the page keeps that default when the decoder is still offered",
       "props.default_vae" in page and "/^rs-/" in page)
+setup = page.split("var SETUP_KEYS", 1)[1].split("];", 1)[0]
+check("a saved output profile keeps the frame-buzz switch", '"debuzz"' in setup)
 
 print("test_debuzz:", "FAILED " + ", ".join(bad) if bad else "all passed")
 sys.exit(1 if bad else 0)

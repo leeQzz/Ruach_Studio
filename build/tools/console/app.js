@@ -12404,7 +12404,7 @@
   // A profile is every knob but the texts and seeds, written out in full (defaults too), so it
   // means the same on a server whose defaults moved. Applying one keeps the texts, seeds and codes.
   var SETUP_KEYS = ["cot", "duration", "cfg_scale", "cfg_lyrics", "steps", "solver", "nar_ladder", "nar_pieces", "vae", "sliders", "loras", "output_format",
-                    "mp3_bitrate", "synth_batch_size", "lm_batch_size"];   // HERESY 1768: nar_ladder; 2007: no peak_clip
+                    "mp3_bitrate", "debuzz", "synth_batch_size", "lm_batch_size"];   // HERESY 1768: nar_ladder; 2007: no peak_clip; the 25 Hz buzz
   function captureSetup() {
     var b = buildRequest(false, false, true), out = {};
     SETUP_KEYS.forEach(function (k) { if (b[k] !== undefined) out[k] = b[k]; });
@@ -12423,6 +12423,7 @@
     if (out.nar_ladder === undefined) out.nar_ladder = false;   // HERESY 1768: written in full, the whole-song decode said too
     if (out.nar_pieces === undefined) out.nar_pieces = false;   // HERESY 2509: whole said too
     if (out.synth_batch_size === undefined) out.synth_batch_size = 1;
+    if (out.debuzz === undefined) out.debuzz = true;   // the 25 Hz buzz out, written in full so a saved profile keeps an off
     out.sliders = out.sliders || [];
     out.loras = out.loras || [];
     return out;

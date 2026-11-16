@@ -47,6 +47,10 @@
 #endif
 
 #ifdef _WIN32
+#    ifndef NOMINMAX
+#        define NOMINMAX
+#    endif
+#    include <windows.h>
 #    include <fcntl.h>
 #    include <io.h>
 #    include <sys/stat.h>   // HERESY 2083b: _S_IREAD, _S_IWRITE for a file written whole
@@ -55,6 +59,7 @@
 #    endif
 #else
 #    include <fcntl.h>      // HERESY 2083b: open() for a file written whole and synced
+#    include <sys/wait.h>   // a debuzz child this thread can stop when the job is cancelled
 #    include <unistd.h>
 #endif
 
@@ -1557,12 +1562,98 @@ static void meta_debuzz(const std::string & dir, bool done, const char * raw, co
     yyjson_mut_doc_free(doc);
 }
 
+// std::system would sit until the child left, so a cancel during a long debuzz never reached the flag.
+// The child is its own process group; cancel terminates that group and the take stays as it was saved.
+static int run_cancellable(const std::string & cmd, const std::atomic<bool> * cancel) {
+#ifdef _WIN32
+    std::string         line = "cmd.exe /d /c " + cmd;
+    std::vector<char>   mutable_cmd(line.begin(), line.end());
+    mutable_cmd.push_back('\0');
+    STARTUPINFOA        si;
+    PROCESS_INFORMATION pi;
+    memset(&si, 0, sizeof(si));
+    memset(&pi, 0, sizeof(pi));
+    si.cb = sizeof(si);
+    if (!CreateProcessA(nullptr, mutable_cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+        return -1;
+    }
+    while (WaitForSingleObject(pi.hProcess, 50) == WAIT_TIMEOUT) {
+        if (cancel && cancel->load()) {
+            TerminateProcess(pi.hProcess, 1);
+            break;
+        }
+    }
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return code == 0 ? 0 : (int) code;
+#else
+    pid_t pid = fork();
+    if (pid < 0) {
+        return -1;
+    }
+    if (pid == 0) {
+        setpgid(0, 0);
+        execl("/bin/sh", "sh", "-c", cmd.c_str(), (char *) nullptr);
+        _exit(127);
+    }
+    setpgid(pid, pid);
+    int status = 0;
+    for (;;) {
+        pid_t got = waitpid(pid, &status, WNOHANG);
+        if (got == pid) {
+            break;
+        }
+        if (got < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        if (cancel && cancel->load()) {
+            kill(-pid, SIGTERM);
+            for (int i = 0; i < 40; i++) {
+                got = waitpid(pid, &status, WNOHANG);
+                if (got == pid) {
+                    return 1;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(25));
+            }
+            kill(-pid, SIGKILL);
+            waitpid(pid, &status, 0);
+            return 1;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    return 1;
+#endif
+}
+
+static const char * debuzz_subtype(const Yue2Request & replay) {
+    if (replay.output_format == "wav16") {
+        return "PCM_16";
+    }
+    if (replay.output_format == "wav32") {
+        return "FLOAT";   // raw float: debuzz.py does not bring the whole file down to 0.999
+    }
+    return "PCM_24";
+}
+
+static std::string debuzz_command(const std::string & script, const std::string & wav, const std::string & out, const char * subtype) {
+    return shell_quote(python_for(script)) + " " + shell_quote(script) + " " + shell_quote(wav) + " " + shell_quote(out) +
+           " 0.8 2000 50 3 " + std::to_string(YUE2_HOP) + " " + std::to_string(YUE2_SAMPLE_RATE) + " " + subtype + " 1>&2";
+}
+
 // After library_save: a WAV take is debuzzed in place when the request asks (the default). The decoder's
 // peak-whole file stays as audio.raw.wav. The cleaned WAV replaces audio.wav and listen.flac, and is
-// returned so the job's own result matches the file. Empty: the take was left as saved (off, MP3, or the
-// cure could not run). The library lock is held only around the swap, not across the Python run.
-static std::string library_debuzz(const std::string & name, const Yue2Request & replay, bool is_mp3) {
-    if (!replay.debuzz) {
+// returned so the job's own result matches the file. Empty: the take was left as saved (off, MP3, cancel,
+// or the cure could not run). The library lock is held only around the swap, not across the Python run.
+static std::string library_debuzz(const std::string & name, const Yue2Request & replay, bool is_mp3, const std::atomic<bool> * cancel) {
+    if (!replay.debuzz || (cancel && cancel->load())) {
         return "";
     }
     std::string dir = g_outputs_dir + "/" + name;
@@ -1581,19 +1672,18 @@ static std::string library_debuzz(const std::string & name, const Yue2Request & 
     std::string wav = dir + "/audio.wav";
     std::string raw = dir + "/audio.raw.wav";
     std::string tmp = dir + "/audio.debuzz.wav";
-    const char * sub = "PCM_24";
-    if (replay.output_format == "wav16") {
-        sub = "PCM_16";
-    } else if (replay.output_format == "wav32") {
-        sub = "FLOAT";
-    }
-    std::string cmd = shell_quote(python_for(script)) + " " + shell_quote(script) + " " + shell_quote(wav) + " " +
-                      shell_quote(tmp) + " 0.8 2000 50 3 " + std::to_string(YUE2_HOP) + " " + std::to_string(YUE2_SAMPLE_RATE) +
-                      " " + sub + " 1>&2";
+    const char * sub = debuzz_subtype(replay);
+    std::string  cmd = debuzz_command(script, wav, tmp, sub);
     fprintf(stderr, "[Library] %s: debuzz\n", name.c_str());
-    int rc = std::system(cmd.c_str());
+    int             rc = run_cancellable(cmd, cancel);
     std::error_code ec;
     auto            sz = std::filesystem::is_regular_file(tmp, ec) ? std::filesystem::file_size(tmp, ec) : 0;
+    if (cancel && cancel->load()) {
+        std::filesystem::remove(tmp, ec);
+        fprintf(stderr, "[Library] %s: debuzz cancelled; the take stays as the decoder wrote it\n", name.c_str());
+        meta_debuzz(dir, false, "", "cancel");
+        return "";
+    }
     if (rc != 0 || ec || sz < 64) {
         std::filesystem::remove(tmp, ec);
         fprintf(stderr, "[Library] %s: debuzz failed (%d); the take stays as the decoder wrote it\n", name.c_str(), rc);
@@ -1631,6 +1721,57 @@ static std::string library_debuzz(const std::string & name, const Yue2Request & 
     }
     fprintf(stderr, "[Library] %s: debuzzed, raw kept as audio.raw.wav\n", name.c_str());
     return cleaned;
+}
+
+// No take folder (the server was started without --outputs, or this track could not be saved): the same cure
+// on the WAV the job returns. There is nowhere to keep a raw copy beside it.
+static std::string debuzz_loose(const std::string & wav, const Yue2Request & replay, const std::atomic<bool> * cancel) {
+    if (!replay.debuzz || (cancel && cancel->load())) {
+        return "";
+    }
+    std::string script = debuzz_script();
+    if (script.empty()) {
+        fprintf(stderr, "[Library] debuzz skipped, lab/debuzz.py not found (set RUACH_DEBUZZ)\n");
+        return "";
+    }
+    std::error_code ec;
+    std::filesystem::path dir = std::filesystem::temp_directory_path(ec) / ("ruach-debuzz-" + job_make_id());
+    if (ec || !std::filesystem::create_directory(dir, ec)) {
+        fprintf(stderr, "[Library] debuzz could not make a temporary directory\n");
+        return "";
+    }
+    std::string in  = (dir / "in.wav").string();
+    std::string out = (dir / "out.wav").string();
+    std::string cleaned;
+    if (write_file(in, wav)) {
+        fprintf(stderr, "[Library] debuzz (no take folder)\n");
+        int  rc = run_cancellable(debuzz_command(script, in, out, debuzz_subtype(replay)), cancel);
+        auto sz = std::filesystem::is_regular_file(out, ec) ? std::filesystem::file_size(out, ec) : 0;
+        if (cancel && cancel->load()) {
+            fprintf(stderr, "[Library] debuzz cancelled\n");
+        } else if (rc == 0 && !ec && sz >= 64) {
+            cleaned = read_file(out);
+        } else {
+            fprintf(stderr, "[Library] debuzz failed (%d); the result stays as the decoder wrote it\n", rc);
+        }
+    }
+    std::filesystem::remove_all(dir, ec);
+    return cleaned;
+}
+
+// The saved take when there is one, otherwise the WAV in the job result. False when the job was cancelled
+// during the cure, so the caller does not mark the job done or debuzz a later variation.
+static bool debuzz_result(std::string & audio, const std::string & saved_as, const Yue2Request & replay, bool is_mp3,
+                          const std::atomic<bool> * cancel) {
+    std::string cleaned = !saved_as.empty() ? library_debuzz(saved_as, replay, is_mp3, cancel) :
+                          (!is_mp3 ? debuzz_loose(audio, replay, cancel) : "");
+    if (cancel && cancel->load()) {
+        return false;
+    }
+    if (!cleaned.empty()) {
+        audio = std::move(cleaned);
+    }
+    return true;
 }
 
 // Local addition: saved copies are named after the song ("Last Train Home.wav"): the title without the
@@ -2685,17 +2826,19 @@ static void decode_job(std::shared_ptr<Job> job, const Yue2Request & request) {
     }
     std::vector<std::string> request_parts = { request_to_json(&replay) };
     std::vector<std::string> audio_parts   = { audio };
+    std::string              saved;
     if (!g_outputs_dir.empty()) {
-        std::string name = library_save(replay, audio, is_mp3, song, 0, 1, 0, 0, !request.abc.empty() && !request.score_planned, render_seconds,
-                                        &job->library_error);
-        if (!name.empty()) {
-            job->takes.push_back(name);
-            latents_save(g_outputs_dir + "/" + name, song);
-            std::string cleaned = library_debuzz(name, replay, is_mp3);
-            if (!cleaned.empty()) {
-                audio_parts[0] = std::move(cleaned);
-            }
+        saved = library_save(replay, audio, is_mp3, song, 0, 1, 0, 0, !request.abc.empty() && !request.score_planned, render_seconds,
+                             &job->library_error);
+        if (!saved.empty()) {
+            job->takes.push_back(saved);
+            latents_save(g_outputs_dir + "/" + saved, song);
         }
+    }
+    if (!debuzz_result(audio_parts[0], saved, replay, is_mp3, &job->cancel)) {
+        active_job_set(nullptr);
+        job->status.store(JobStatus::CANCELLED);
+        return;
     }
     active_job_set(nullptr);
     job->result_body = multipart_build_tracks(request_parts, audio_parts, is_mp3 ? "audio/mpeg" : "audio/wav",
@@ -2911,18 +3054,20 @@ static void run_job(std::shared_ptr<Job> job, Yue2Request request) {
                                             pipeline_format_tokens(song.tokens), (int) t / M, (int) t % M);
         request_parts.push_back(request_to_json(&replay));
         // Local addition: every track lands in the library as it is encoded
+        std::string saved;
         if (!g_outputs_dir.empty()) {
-            std::string name = library_save(replay, audio_parts.back(), is_mp3, song, (int) t, (int) songs.size(),
-                                            (int) t / M, (int) t % M, !request.abc.empty() && !request.score_planned, render_seconds,
-                                            &job->library_error);
-            if (!name.empty()) {
-                job->takes.push_back(name);
-                latents_save(g_outputs_dir + "/" + name, song);   // HERESY 1168: for another decoder, in seconds
-                std::string cleaned = library_debuzz(name, replay, is_mp3);
-                if (!cleaned.empty()) {
-                    audio_parts.back() = std::move(cleaned);
-                }
+            saved = library_save(replay, audio_parts.back(), is_mp3, song, (int) t, (int) songs.size(),
+                                 (int) t / M, (int) t % M, !request.abc.empty() && !request.score_planned, render_seconds,
+                                 &job->library_error);
+            if (!saved.empty()) {
+                job->takes.push_back(saved);
+                latents_save(g_outputs_dir + "/" + saved, song);   // HERESY 1168: for another decoder, in seconds
             }
+        }
+        if (!debuzz_result(audio_parts.back(), saved, replay, is_mp3, &job->cancel)) {
+            active_job_set(nullptr);
+            job->status.store(JobStatus::CANCELLED);
+            return;
         }
         latents.push_back(std::move(song.latents));
     }

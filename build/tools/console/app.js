@@ -1365,6 +1365,7 @@
   setInterval(function () { if (String($("odeSteps").value) !== stepsShown) syncStepsRange(); }, 400);   // a value the page set by itself (a take's form)
 
   function paintOutput() {
+    syncLongDefault();
     syncStepsRange();                                 // HERESY 1498
     var format = $("outFormat").value;
     $("bitrateField").classList.toggle("is-hidden", format !== "mp3");
@@ -1389,21 +1390,50 @@
   $("outFormat").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
   $("mp3Bitrate").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
   ["odeSteps", "maxLength"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
-  ["narLong", "narDecode"].forEach(function (id) { $(id).addEventListener("change", paintOutput); });   // HERESY 2509: the window's note follows
-  // HERESY 2509: one window of the sound half on this engine's context, for a long prompt and a short one (6000 and 1000 rows: about the
-  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days); the pipeline's own count, (context - prefix - 3) / 2 frames
+  $("narDecode").addEventListener("change", paintOutput);
+  $("narLong").addEventListener("change", function () {
+    this.dataset.picked = "1";   // an explicit Whole or Pieces, not the automatic default
+    paintOutput();
+  });
+  // One window of the sound half on this engine's context, for a long prompt and a short one (6000 and 1000 rows: about the
+  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days); the pipeline's own count, (context - prefix - 3) / 2 frames.
+  // win[0] is the long prompt (the shorter window, the one a scored song hits first); win[1] is the short prompt.
   function wholeWindow() {
     var ctx = STATE.settings && +STATE.settings.max_seq ? +STATE.settings.max_seq : fullContext();
     var at = function (prefix) { return Math.max(0, Math.floor((ctx - prefix - 3) / 2) / FRAME_RATE); };
     return [at(6000), at(1000)];
   }
-  // said when Max length is well past what one window holds (30 s past its short-prompt end), whole and not on the ladder
-  function longNote() {
-    if ($("narLong").value !== "whole" || $("narDecode").value === "ladder") return "";
+  // test-nar-seam holds (weights sum to 1, no stub tail, every window fits). While it does, a Max length past one
+  // window starts on Pieces so the music is not cut. Set this false if those checks fail: the page then stays on Whole and warns.
+  var NAR_SEAM_DEFAULT_PIECES = true;
+  function pastOneWindow() {
     var length = parseFloat($("maxLength").value), win = wholeWindow();
-    if (!isFinite(length) || length <= win[1] + 30) return "";
-    return tr("Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).")
+    return isFinite(length) && win[0] > 0 && length > win[0];
+  }
+  function longDefault() {
+    return NAR_SEAM_DEFAULT_PIECES && pastOneWindow() ? "pieces" : "whole";
+  }
+  function syncLongDefault() {
+    var el = $("narLong");
+    if (!el || el.dataset.picked === "1") return;
+    var want = longDefault();
+    if (el.value !== want) el.value = want;
+  }
+  function longNote() {
+    if ($("narDecode").value === "ladder" || !pastOneWindow()) return "";
+    var length = parseFloat($("maxLength").value), win = wholeWindow();
+    var head = tr("Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).")
       .replace("{0}", clock(length)).replace("{1}", clock(win[0])).replace("{2}", clock(win[1]));
+    if ($("narLong").value === "pieces") {
+      if (!NAR_SEAM_DEFAULT_PIECES) {
+        return head + " " + tr("Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.");
+      }
+      return head + " " + tr("Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.");
+    }
+    if (!NAR_SEAM_DEFAULT_PIECES) {
+      return head + " " + tr("The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.");
+    }
+    return head + " " + tr("Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.");
   }
   // HERESY 1169: Songs × Sounds beside Generate, and how many takes that makes
   function paintCounts() {
@@ -1432,7 +1462,7 @@
     return off("odeSteps", "steps") || off("maxLength", "duration") ||
       $("odeSolver").value !== "multistep" || $("outFormat").value !== "wav24" ||   // HERESY 1710: AB2 the default
       $("narDecode").value !== "standard" ||                                       // HERESY 1768: the whole-song decode the default
-      $("narLong").value !== "whole";                                              // HERESY 2509: whole, held to one window, the default
+      $("narLong").value !== longDefault();                                        // Pieces once Max length is past one window
   }
   $("resetOutput").addEventListener("click", function () {
     askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
@@ -1445,7 +1475,8 @@
     $("odeSolver").value = "multistep";                 // HERESY 1710: AB2 the default now (Midpoint before)
     $("odeSolver").dispatchEvent(new Event("change", { bubbles: true }));
     $("narDecode").value = "standard";                  // HERESY 1768: the whole-song decode
-    $("narLong").value = "whole";                       // HERESY 2509: held to one window, never joined
+    $("narLong").dataset.picked = "";
+    $("narLong").value = "whole";                       // syncLongDefault moves this to Pieces when Max length is past one window
     paintOutput();
     toast("Output reset: WAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
   }
@@ -2032,7 +2063,7 @@
     body.vae = selectedVae();
     if ($("odeSolver").value !== "midpoint") body.solver = $("odeSolver").value;  // HERESY 1004
     if ($("narDecode").value === "ladder") body.nar_ladder = true;   // HERESY 1768: the decode ladder, experimental, the Creator's own
-    if ($("narLong").value === "pieces") body.nar_pieces = true;     // HERESY 2509: past one window in pieces, experimental; whole otherwise
+    if ($("narLong").value === "pieces") body.nar_pieces = true;     // past one window the music runs on and the sound is joined; Whole sends nothing and is held to the window
     if (STATE.sliderChoice.length) {
       body.sliders = slidersBody();             // HERESY 1166: with each one's curve, where it is not flat
     }
@@ -2714,7 +2745,8 @@
     else { $("odeSteps").value = String(engineSteps()); syncStepsRange(); }   // HERESY 1710: a request without steps was made at the engine's
     $("odeSolver").value = ["midpoint", "multistep", "heun", "euler"].indexOf(req.solver) >= 0 ? req.solver : "midpoint";
     $("narDecode").value = req.nar_ladder === true ? "ladder" : "standard";   // HERESY 1768: a take's own, the draft's, a profile's
-    $("narLong").value = req.nar_pieces === true ? "pieces" : "whole";         // HERESY 2509: the same
+    $("narLong").value = req.nar_pieces === true ? "pieces" : "whole";         // a saved choice, not overwritten by the long-song default
+    $("narLong").dataset.picked = "1";
     if (typeof req.duration === "number") $("maxLength").value = round(req.duration, 3);
     $("variations").value = typeof req.synth_batch_size === "number" ? Math.max(1, Math.min(9, req.synth_batch_size)) : 1;
     if (FORMAT_LABELS[req.output_format]) $("outFormat").value = req.output_format;
@@ -3444,7 +3476,7 @@
       // HERESY 2433 (Viktor 12.11.2026: «K: не будем браковать сразу, а предупреждать»): a score without its key line is sung as written, and said
       if (data.score_warning && !job.lost) toastOnce(job.id + ":nokey", "No key line in the score: sung as written", "warn");
       // HERESY 2509: a song the window ended, not the song itself: said, with the way past it
-      if (data.window_held && !job.lost) toastOnce(job.id + ":window", tr("Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)").replace("{0}", clock(data.window_held)), "warn");
+      if (data.window_held && !job.lost) toastOnce(job.id + ":window", tr("Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.").replace("{0}", clock(data.window_held)), "warn");
       // Only jump to the new song if the run is what you were looking at;
       // opening it never cuts off a song that is playing.
       if (watching) openTake(job.takes[0]);
@@ -6178,7 +6210,7 @@
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
       cell("Free tempo", "Free tempo", rq.free_tempo === true ? tr("on") : "\u2014", "") +   // HERESY 1416 («off» is Direct's name in the catalogs)
       cell("Sound decode", "Sound decode", rq.nar_ladder === true ? tr("Ladder · experimental") : "\u2014", "") +   // HERESY 1768
-      cell("Long songs", "Long songs", rq.nar_pieces === true ? tr("Pieces · experimental") : "\u2014", "") +   // HERESY 2509
+      cell("Long songs", "Long songs", rq.nar_pieces === true ? tr("Pieces · joined") : tr("Whole · one window"), "") +
       cell("Chords", "Chords", rq.harmony ? tr(HARMONY_NAMES[harmonyLevelOf(rq.harmony)] || "custom") : "\u2014", "");   // HERESY 1607
     return '<div class="meta-row trio medcard">' + column("Score Planner", '<dl class="meta-rows">' + plan + "</dl>") +
       column("Music Tokens", '<dl class="meta-rows">' + mus + "</dl>") + column("The run", '<dl class="meta-rows">' + run + "</dl>") + "</div>";

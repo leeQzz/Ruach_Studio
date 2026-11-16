@@ -17,6 +17,33 @@ def norm(s):
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", s)).strip()
 
 
+def words(text):
+    return [w for w in norm(text).split() if w]
+
+
+def edit_distance(ref, hyp):
+    """Substitutions, insertions and deletions between two word lists."""
+    if not ref:
+        return len(hyp)
+    if not hyp:
+        return len(ref)
+    prev = list(range(len(hyp) + 1))
+    for i, a in enumerate(ref, 1):
+        cur = [i]
+        for j, b in enumerate(hyp, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a != b)))
+        prev = cur
+    return prev[-1]
+
+
+def wer(reference, hypothesis):
+    """Word error rate. An empty reference is 0 when nothing was heard, else 1."""
+    ref, hyp = words(reference), words(hypothesis)
+    if not ref:
+        return 0.0 if not hyp else 1.0
+    return round(edit_distance(ref, hyp) / len(ref), 4)
+
+
 def lyric_lines(lyrics):
     lines = []
     for s in lyrics.splitlines():
@@ -57,7 +84,9 @@ def measure(whisper, lyrics):
     texts = [s["text"] for s in whisper["segments"] if s["text"]]
     top = max(set(texts), key=texts.count) if texts else ""
     loop = bool(texts) and (texts.count(top) >= 6 and texts.count(top) / len(texts) > 0.3)
+    heard = " ".join(s.get("text") or "" for s in whisper.get("segments") or [])
     return {"lines": len(lines), "length": length, "minutes": minutes,
             "reached": {"line": last["line"] + 1, "at": last["start"]} if last else None,
             "backs": backs, "segments": rows, "distinct": len(set(texts)), "total": len(texts),
+            "wer": wer(" ".join(text for text, _ in lines), heard),
             "loop": {"text": top, "times": texts.count(top)} if loop else None}

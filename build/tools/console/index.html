@@ -1414,6 +1414,16 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
                   <input type="number" id="cfgLyrics" step="0.1" placeholder="as Guidance" value="2.2" /><span class="cfg-light" id="cfgLyricsLight" tabindex="-1" role="img"></span>
                 </label>
               </div>
+              <div class="field-row cfg-rows">
+                <label class="check" data-tip="After the song is made, Whisper scores the words. If the word error is over the threshold, a new music seed is drawn and the song is made again, up to this many attempts. The lowest error is kept. Off unless ticked.">
+                  <input type="checkbox" id="glossGate" /> <span><strong>Lyrics gate</strong></span></label>
+                <label class="field field-inline" for="glossThreshold" data-tip="Word error rate, 0 to 1. A take at or under this is kept and the gate stops. 0.35 is the default.">
+                  <span class="label">WER threshold</span>
+                  <input type="number" id="glossThreshold" min="0" max="1" step="0.05" value="0.35" /></label>
+                <label class="field field-inline" for="glossAttempts" data-tip="How many songs the gate may make, 1 to 8. The first that is under the threshold is kept; otherwise the lowest error of them.">
+                  <span class="label">Attempts</span>
+                  <input type="number" id="glossAttempts" min="1" max="8" step="1" value="3" /></label>
+              </div>
               <!-- HERESY 1402 (Viktor 12.10.2026: «Перенеси кнопку Reset sampling на новую строку с выключкой вправо. Она вылазит за границу даже при 100% скейле»): a row of its own -->
               <div class="field-row reset-row">
                 <div class="field grow reset-cell">

@@ -7,6 +7,8 @@ on Forge, next to it (Viktor 30.09.2026: «Считай всё на Големе
   GET /health
   GET /gloss?name=TAKE[&force=1]   Whisper against the take's lyrics: the result when it is
                                    there, else {"status": "running" | "queued"} and a job starts
+  POST /gloss/gate {…a /synth body, gloss_gate, gloss_threshold, gloss_attempts}
+                                   after /synth, reseed while the word error is over the line (GET /gloss/gate?id=)
   GET /gloss?name=TAKE&cached=1    only an earlier measurement, 204 if there is none yet (HERESY 2103; 404: no such take)
   GET /spectrum?name=TAKE          the take's spectrum (spectrum_job.py), its binary block when
                                    ready, {"status": …} with 202 while it is computed
@@ -177,6 +179,7 @@ NEED_MB = 5000                     # large-v3 float16 with room for a 7-minute s
 
 sys.path.insert(0, str(HERE))
 import gloss_core  # noqa: E402
+import gloss_gate  # noqa: E402   after /synth: reseed while the word error is over the line
 import collection  # noqa: E402   HERESY 1041
 import name_rule  # noqa: E402   HERESY 2462: one rule for every name
 import writer  # noqa: E402   HERESY 1047
@@ -815,6 +818,17 @@ def gloss(name, force=False, cached_only=False, source="", job=None):
                   at=time.strftime("%Y-%m-%d %H:%M"))
     json.dump(result, open(cached, "w", encoding="utf-8"), ensure_ascii=False)
     return result
+
+
+def gloss_score(take, lyrics):
+    """Whisper, then gloss_core, for the lyrics gate. lyrics is the text the gate already holds."""
+    result = gloss(take, force=True)
+    if "wer" not in result:
+        result["wer"] = gloss_core.wer(lyrics, "")
+    return result
+
+
+api.gloss_score(gloss_score)
 
 
 def gloss_async(name, force=False, source=""):
@@ -4515,6 +4529,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, cat)
             if url.path == "/trash":
                 return self.send(200, collection.trash_list(KIT))
+            if url.path == "/gloss/gate":                # lyrics gate: one job, each attempt on it
+                if q.get("cancel") == "1":
+                    gloss_gate.cancel(q.get("id", ""))
+                st = gloss_gate.job(q.get("id", ""))
+                return self.send(200, st) if st else self.send(404, {"error": "no such lyrics-gate job"})
             if url.path == "/section/live":              # HERESY 1414: the sections being replaced
                 return self.send(200, {"live": section.live()})
             if url.path == "/section/job":               # HERESY 1425: one job as it stands, for the page to follow it to its takes
@@ -4776,6 +4795,23 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/art/namesakes":                 # HERESY 1425: {name, to, replace}: a take's cover to its namesakes
                 data = json.loads(body.decode("utf-8"))
                 return self.send(200, art_to_namesakes(str(data.get("name") or ""), data.get("to") or [], bool(data.get("replace"))))
+            if url.path == "/gloss/gate":                # {…synth, gloss_gate, gloss_threshold, gloss_attempts} or {id, cancel}
+                data = json.loads(body.decode("utf-8") or "{}")
+                if data.get("cancel"):
+                    gloss_gate.cancel(str(data.get("id") or ""))
+                    st = gloss_gate.job(str(data.get("id") or ""))
+                    return self.send(200, st or {"status": "cancelled"})
+                try:
+                    gate = gloss_gate.settings(data)
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                if not gate["gloss_gate"]:
+                    return self.send(400, {"error": "gloss_gate is off"})
+                if not str(data.get("lyrics") or "").strip():
+                    return self.send(400, {"error": "the lyrics gate needs lyrics"})
+                started = gloss_gate.start(gloss_gate.strip(data), gloss_score, gate["gloss_threshold"], gate["gloss_attempts"],
+                                           engine=api._engine)
+                return self.send(202, {"id": started["id"]})
             if url.path == "/section/repeat":                # HERESY 1715: {name, a, b, lyrics, versions, section, abc}: a section sung once more
                 data = json.loads(body.decode("utf-8"))
                 return self.send(202, section.repeat(data.get("name"), data.get("a"), data.get("b"), data.get("lyrics"),

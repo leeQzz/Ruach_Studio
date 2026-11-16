@@ -43,7 +43,9 @@ def call(path, body=None, timeout=60):
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
                   sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
-                  exclude_styles: str = "", debuzz: bool = True, nar_pieces: bool | None = None) -> dict:
+                  exclude_styles: str = "", debuzz: bool = True,
+                  gloss_gate: bool = False, gloss_threshold: float = 0.35, gloss_attempts: int = 3,
+                  nar_pieces: bool | None = None) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
     exclude_styles: what the song must not have (drones, beats, drums). The guidance's unconditional pass carries
     these instead of an empty style. Empty leaves that pass as it is. When guidance is 1.0 and there is no separate
@@ -64,7 +66,9 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     debuzz: true (the default) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the decoder's
     peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it.
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
-    job_status."""
+    job_status. gloss_gate (off unless true): after the song, if the word error is over gloss_threshold (0 to 1),
+    draw another music seed and make it again, up to gloss_attempts (1 to 8). The answer's gloss_attempts lists
+    each try; the take kept is the lowest error. exclude_styles and debuzz are both kept."""
     body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental,
             "debuzz": bool(debuzz)}
     if str(exclude_styles or "").strip():
@@ -84,6 +88,10 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
         body["music_seed"] = music_seed
     if sound_seed is not None:
         body["sound_seed"] = sound_seed
+    if gloss_gate:
+        body["gloss_gate"] = True
+        body["gloss_threshold"] = gloss_threshold
+        body["gloss_attempts"] = gloss_attempts
     if nar_pieces is not None:                          # left out: the API leaves it out, and /synth applies the window default
         body["nar_pieces"] = nar_pieces
     job = call("/songs", body)

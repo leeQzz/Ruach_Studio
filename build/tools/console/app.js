@@ -2128,6 +2128,22 @@
       if (!isFinite(lyr) || lyr < 0) throw new Error("Lyrics guidance must be a number, 0 or more");
       body.cfg_lyrics = lyr;
     }
+    if (!plan && $("glossGate")) {
+      var th = parseFloat($("glossThreshold").value), at = parseInt($("glossAttempts").value, 10);
+      if ($("glossGate").checked || loose) {
+        if (!isFinite(th) || th < 0 || th > 1) throw new Error("WER threshold must be from 0 to 1");
+        if (!isFinite(at) || at < 1 || at > 8) throw new Error("Lyrics gate attempts must be from 1 to 8");
+      }
+      if ($("glossGate").checked) {
+        body.gloss_gate = true;
+        body.gloss_threshold = th;
+        body.gloss_attempts = at;
+      } else if (loose) {
+        body.gloss_gate = false;
+        body.gloss_threshold = th;
+        body.gloss_attempts = at;
+      }
+    }
     if (freeTempoOn() && cot !== "off") body.free_tempo = true;   // HERESY 1416: with a score only
     if (cot !== "off" && String(body.abc || "").trim() && $("abcOpening") && $("abcOpening").checked) body.abc_continue = true;   // HERESY 1609: an opening, planned on from
     if (cot !== "off" && (!String(body.abc || "").trim() || body.abc_continue) && harmonyBody()) body.harmony = harmonyBody();   // HERESY 1607: when the model plans the score
@@ -2785,6 +2801,11 @@
     if (typeof req.instrumental === "boolean") $("instrumental").checked = req.instrumental;
     paintPlanBtn();   // HERESY 1169 · 1249 (Viktor: «Кнопка … в режиме FULL неактивна»): a mode set here (the draft on load, Retake, Reuse, a prompt file) moved no change event, and the button kept the Direct it was first painted in
     $("cfgLyrics").value = typeof req.cfg_lyrics === "number" && req.cfg_lyrics >= 0 ? round(req.cfg_lyrics, 4) : "";   // HERESY 1397
+    if ($("glossGate")) {
+      $("glossGate").checked = req.gloss_gate === true;
+      if (typeof req.gloss_threshold === "number" && isFinite(req.gloss_threshold)) $("glossThreshold").value = req.gloss_threshold;
+      if (typeof req.gloss_attempts === "number" && isFinite(req.gloss_attempts)) $("glossAttempts").value = req.gloss_attempts;
+    }
     setFreeTempo(req.free_tempo === true);                // HERESY 1416: a take's own, the draft's, a prompt file's
     setVocalOctave(req.vocal_octave);                     // HERESY 2348: the planned Vocal line's octaves, the song's own (none said: 0)
     // HERESY 1607; 1613: a draft kept before Chords existed has no «harmony» and keeps the default; a take or a file opens as it was made
@@ -2856,7 +2877,8 @@
   // HERESY 1607, 1609: harmony and abc_continue among a prompt file's keys
   var PROMPT_KEYS = ["title", "style", "exclude_styles", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
     "vae", "solver", "nar_ladder", "nar_pieces", "sliders", "loras", "lora_groups", "plan_only", "semantic_tokens", "semantic_keep", "parent", "duration", "steps",
-    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "debuzz", "score_guard", "seconds", "instrumental"];
+    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "debuzz", "score_guard", "seconds", "instrumental",
+    "gloss_gate", "gloss_threshold", "gloss_attempts"];
   var GROUP_NAMES = { abc: "Score planner", semantic: "Music tokens" };
   function openNotes(req) {
     var notes = [], say = function (text) { notes.push(text); };
@@ -3290,8 +3312,9 @@
       // HERESY 2463: one process on the Intel Arc at a time: the Studio's own writer leaves it before the song (the lab says when it did)
       return fetch("/lab/llm/yield" + (LLM_SCOPE ? "?scope=" + encodeURIComponent(LLM_SCOPE) : ""), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })   // the lab takes no POST without a body
         .catch(function () { return null; })
-        .then(function () { return post("/synth", sent); });
+        .then(function () { return sent.gloss_gate ? post("/lab/gloss/gate", sent) : post("/synth", sent); });
     }).then(function (data) {
+      if (body.gloss_gate) meta.kind = "gloss-gate";
       var job = registerJob(data.id, meta, body);
       if (data && data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
       paintAllRuns();
@@ -3348,7 +3371,8 @@
     open.forEach(function (job) {
       if (job.polling) return;
       job.polling = true;
-      api("/job?id=" + encodeURIComponent(job.id)).then(function (data) {
+      var path = job.kind === "gloss-gate" ? "/lab/gloss/gate?id=" + encodeURIComponent(job.id) : "/job?id=" + encodeURIComponent(job.id);
+      api(path).then(function (data) {
         job.polling = false;
         applyStatus(job, data || {});
       }).catch(function (error) {
@@ -3362,6 +3386,8 @@
     var status = data.status;
     if (data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
     // Synth jobs report the seeds the server resolved, from the moment they are queued.
+    if (Array.isArray(data.gloss_attempts)) job.glossAttempts = data.gloss_attempts;
+    if (data.gloss_wer != null) job.glossWer = data.gloss_wer;
     if (data.lm_seed !== undefined && data.lm_seed !== null) {
       STATE.statusKnowsQueue = true;
       job.resolved.lm_seed = String(data.lm_seed);
@@ -4652,6 +4678,10 @@
       var eyebrow = label;
       if (job.status === "queued") eyebrow = active && active !== job ? "waiting behind " + active.title : "waiting for the server";
       else if (job.status === "saving") eyebrow = "writing the files";
+      if (job.kind === "gloss-gate" && job.glossAttempts && job.glossAttempts.length) {
+        var last = job.glossAttempts[job.glossAttempts.length - 1];
+        eyebrow += " · lyrics " + job.glossAttempts.length + (last.wer != null ? " · WER " + last.wer : "");
+      }
       $("takeEyebrow").textContent = eyebrow;
       $("takeTitle").textContent = job.title;
       $("takeTitle").setAttribute("translate", "no");   // HERESY 1166: a title is the user's
@@ -4778,7 +4808,8 @@
   }
   function cancelNow(job, doomed, live) {
     Promise.all(doomed.map(function (j) {
-      return post("/job?id=" + encodeURIComponent(j.id) + "&cancel=1").catch(function (error) { toast(error.message, "bad"); });
+      var call = j.kind === "gloss-gate" ? post("/lab/gloss/gate", { id: j.id, cancel: true }) : post("/job?id=" + encodeURIComponent(j.id) + "&cancel=1");
+      return call.catch(function (error) { toast(error.message, "bad"); });
     })).then(function () {
       var others = doomed.filter(function (j) { return j !== job; }).length;
       if (!live) toast("It had already finished; " + others + " of its versions still running or waiting are cancelled");   // the catalogs: {#0}
@@ -12315,6 +12346,9 @@
       lm_seed: $("lmSeed").value.trim(), seed: $("soundSeed").value.trim(), cot: currentCot(),
       cfg_scale: $("cfg").dataset.touched && $("cfg").value.trim() !== "" ? parseFloat($("cfg").value) : -1,
       cfg_lyrics: $("cfgLyrics").value.trim() !== "" ? parseFloat($("cfgLyrics").value) : -1,   // HERESY 1397
+      gloss_gate: !!($("glossGate") && $("glossGate").checked),
+      gloss_threshold: $("glossThreshold") ? parseFloat($("glossThreshold").value) : 0.35,
+      gloss_attempts: $("glossAttempts") ? parseInt($("glossAttempts").value, 10) : 3,
       free_tempo: freeTempoOn(),                                                                     // HERESY 1416
       vocal_octave: fullOctave(),                                                                    // HERESY 2348: the song's own
       harmony: harmonyBody(),                                                                        // HERESY 1607
@@ -12553,7 +12587,7 @@
   // A profile is every knob but the texts and seeds, written out in full (defaults too), so it
   // means the same on a server whose defaults moved. Applying one keeps the texts, seeds and codes.
   var SETUP_KEYS = ["cot", "duration", "cfg_scale", "cfg_lyrics", "steps", "solver", "nar_ladder", "nar_pieces", "vae", "sliders", "loras", "output_format",
-                    "mp3_bitrate", "debuzz", "synth_batch_size", "lm_batch_size"];   // HERESY 1768: nar_ladder; 2007: no peak_clip; the 25 Hz buzz
+                    "mp3_bitrate", "debuzz", "synth_batch_size", "lm_batch_size", "gloss_gate", "gloss_threshold", "gloss_attempts"];   // HERESY 1768: nar_ladder; 2007: no peak_clip; the 25 Hz buzz
   function captureSetup() {
     var b = buildRequest(false, false, true), out = {};
     SETUP_KEYS.forEach(function (k) { if (b[k] !== undefined) out[k] = b[k]; });

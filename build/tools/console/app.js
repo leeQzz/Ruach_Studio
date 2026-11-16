@@ -1484,6 +1484,20 @@
     }
     return head + " " + tr("Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.");
   }
+  // outputChanged still compares narLong with "whole". Frame buzz adds its checkbox on that same line.
+  // An automatic Pieces is the default, so it is masked here, and a debuzz term on that line still counts.
+  (function () {
+    var raw = outputChanged;
+    outputChanged = function () {
+      var el = $("narLong");
+      var mask = el && el.dataset.picked !== "1" && el.value === longDefault() && el.value !== "whole";
+      if (!mask) return raw();
+      var saved = el.value;
+      el.value = "whole";
+      try { return raw(); }
+      finally { el.value = saved; }
+    };
+  })();
   // HERESY 1169: Songs × Sounds beside Generate, and how many takes that makes
   function paintCounts() {
     // HERESY 2137 (the audit of 06.11.2026): loaded codes render one song whatever Probes says (queueVersions), so the count says one and the slider
@@ -1511,7 +1525,7 @@
     return off("odeSteps", "steps") || off("maxLength", "duration") ||
       $("odeSolver").value !== "multistep" || $("outFormat").value !== "wav24" ||   // HERESY 1710: AB2 the default
       $("narDecode").value !== "standard" ||                                       // HERESY 1768: the whole-song decode the default
-      $("narLong").value !== longDefault();                                        // Pieces once Max length is past one window
+      $("narLong").value !== "whole";                                              // HERESY 2509: whole, held to one window, the default
   }
   $("resetOutput").addEventListener("click", function () {
     askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
@@ -1520,12 +1534,12 @@
   function resetOutputNow() {
     store("yue2.output", null);
     paintOutputDefaults();
+    if ($("narLong")) $("narLong").dataset.picked = "";   // the last paintOutput may move Whole to Pieces
     // HERESY 1168 (Viktor 07.10.2026: «Reset output не обнуляет выбор резолвера»): the solver back to midpoint too
     $("odeSolver").value = "multistep";                 // HERESY 1710: AB2 the default now (Midpoint before)
     $("odeSolver").dispatchEvent(new Event("change", { bubbles: true }));
     $("narDecode").value = "standard";                  // HERESY 1768: the whole-song decode
-    $("narLong").dataset.picked = "";
-    $("narLong").value = "whole";                       // syncLongDefault moves this to Pieces when Max length is past one window
+    $("narLong").value = "whole";                       // HERESY 2509: held to one window, never joined
     paintOutput();
     toast("Output reset: WAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
   }

@@ -103,6 +103,7 @@ on Forge, next to it (Viktor 30.09.2026: «Считай всё на Големе
   GET /loop?name=&start=&seconds=                 HERESY 1325: a loop cut from the take's WAV, seamless (audio/wav)
   GET /stereo/guard?ws=&base=&again=1   HERESY 2340: a workspace's takes against the base model on the same cards, by their stereo (202 while it measures)
   GET /train/datasets · /train/scan?name= · /train/prepare?name= · /train/run?name= · /train/log?name=
+  GET /train/scores?name=&cot=full|melody[&transcriber=]   which tracks of a prepared set have a score for that mode
   GET /train/doctor?name= · POST /train/doctor {name, again}   HERESY 2351: the dataset doctor (dataset_doctor.py), a raw folder against the guide
   POST /train/prepare {from, name, style, tracks} · /train/run {dataset, name, steps…} · /train/stop {name} · /train/pack {name, undo} (HERESY 1626)
        /train/publish {name, file}: one epoch's checkpoint into loras/ (HERESY 1067)
@@ -4286,6 +4287,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, training.listen_status(KIT, q.get("name", "")))
             if url.path == "/train/doctor":                 # HERESY 2351: the dataset doctor's report and where it stands
                 return self.send(200, dataset_doctor.status(KIT, q.get("name", "")))
+            if url.path == "/train/scores":                 # full / melody: scores kept on the set, transcribed, missing, refused
+                try:
+                    d = training._safe_dir(training.paths(KIT)["prepared"], q.get("name", ""))
+                    tx = q.get("transcriber") or training.set_transcriber(d) or training.NEW_SET_TRANSCRIBER
+                    return self.send(200, training.score_report(d, q.get("cot") or "full", tx))
+                except (ValueError, OSError) as e:
+                    return self.send(400, {"error": str(e)})
             if url.path == "/train/voice":                  # HERESY 1169: a raw folder's voice, measured
                 return self.send(200, training.voice_status(KIT, q.get("name", "")))
             if url.path == "/topology":                      # HERESY 2085: Engine → Hardware → Topology; fresh: the Engine opened

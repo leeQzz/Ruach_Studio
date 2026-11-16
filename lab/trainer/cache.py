@@ -64,15 +64,9 @@ SHEET_FLAGS = {"full": [], "melody": ["--melody-only"]}
 # in its own file, so a set's SheetSage2 sheets are never mixed with Refined's (whose chords and keys are wider)
 # HERESY 2359: and SheetSage2 with the bfloat16 rotary angles it learnt with ("sheetsage2-bf16", files .bf16.abc); plain "sheetsage2" is
 # SheetSage2 with the exact angles every set's sheets were written with so far (no suffix, byte-identical to them)
-TRANSCRIBERS = ("sheetsage2", "sheetsage2-bf16", "refined")
-SUFFIX = {"sheetsage2": "", "sheetsage2-bf16": ".bf16", "refined": ".refined"}
+from prompt import SHEET_SUFFIX as SUFFIX  # the same names prompt.sheet_filename writes and the dataset check counts
+TRANSCRIBERS = tuple(SUFFIX)
 REFINED_GGUF = "SheetSage2-Refined-F16.gguf"
-
-
-def _sheet_suffix(transcriber):
-    if transcriber not in TRANSCRIBERS:
-        raise ValueError(f"transcriber {transcriber!r}: sheetsage2-bf16 (Heretical), refined (Refined) or sheetsage2 (Standard, the sheets before 2.0.7)")   # HERESY 2377
-    return SUFFIX[transcriber]
 
 
 def _angles_env(transcriber):
@@ -81,7 +75,8 @@ def _angles_env(transcriber):
 
 
 def sheet_path(set_folder, stem, cot, transcriber="sheetsage2"):
-    return os.path.join(set_folder, "_ruach_cache", f"{stem}_ruach.{cot}{_sheet_suffix(transcriber)}.abc")
+    from prompt import sheet_filename
+    return os.path.join(set_folder, "_ruach_cache", sheet_filename(stem, cot, transcriber))
 
 
 def missing_sheets(set_folder, cot, transcriber="sheetsage2"):
@@ -135,7 +130,8 @@ def stems_path(set_folder, stem):
 
 
 def stem_sheet_path(set_folder, stem, variant, cot, transcriber="sheetsage2"):
-    return os.path.join(set_folder, "_ruach_cache", f"{stem}_ruach.{variant}.{cot}{_sheet_suffix(transcriber)}.abc")
+    from prompt import stem_sheet_filename
+    return os.path.join(set_folder, "_ruach_cache", stem_sheet_filename(stem, variant, cot, transcriber))
 
 
 def missing_stems(set_folder, cot="off", transcriber="sheetsage2"):

@@ -11,10 +11,14 @@ One LoRA over both experts, as AI-Toolkit trains it (Ostris, MIT; its yue2_model
     ar_kl_weight > 0, KL(base ‖ adapted) against the same AR with the adapter switched off;
   · AdamW (eps 1e-6, weight decay 1e-2), constant lr, the AR's adapter at lr × ar_lr_multiplier, gradients
     clipped at 1.0; gradient checkpointing.
-Score mode (HERESY 1420; cot "full" or "melody"): each track's sheet by the engine's transcriber (cache.sheets, beside the latents);
-per step, with probability abc_dropout (0.5, AI-Toolkit's) the track trains as Direct (the off instruction, no sheet), else the AR
-sees the cot's instruction and the sheet's ids before [ABC_END, MUSIC_START]: the sheet in the AR's targets and in the NAR's
-conditioning alike (AI-Toolkit's _item_prefix_and_abc and _ar_inputs). A track without a sheet trains as Direct, said in the log.
+Score mode (HERESY 1420; cot "full" or "melody"): the prompt is yue2_build_prompt_ids (prompt.build_prompt_ids). The score's
+ids sit between ABC_START and ABC_END. They come from a score kept on the track (dataset.json scores/score/abc) or, when
+the set has none, from the engine's transcriber (cache.sheets, beside the latents). A score kept on the track is not
+transcribed over. Per step, with probability abc_dropout (0.5, AI-Toolkit's) the track trains as Direct (the off
+instruction, no sheet), else the AR sees the cot's instruction and the score: the score and ABC_END in the AR's targets
+(the ABC phase writes them), MUSIC_START masked (the pipeline inserts it; neither phase samples it), and the codec
+tokens supervised as in Direct. The NAR is conditioned on the whole prompt either way. A track without a score trains
+as Direct, said in the log.
 The separation (HERESY 1422; do_separation): each track split into voice and instrumental by the studio's separator (cache.stems:
 the stems' codec tokens, and in score mode their sheets); each step the AR also learns the voice from the lyrics alone and the music
 from the tags alone (the prompts ("", lyrics) and (style, "")), from the song's start; its lesson (ce + 0.5·ce_vocals + 1.0·ce_music)
@@ -53,8 +57,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cache as latent_cache  # noqa: E402   (the name `cache` is the AR's KV cache in the loop)
 from load import load_model  # noqa: E402
 from lora import inject, load_into, set_enabled, state_dict  # noqa: E402
-from model import ABC_END, CODEC_OFFSET, EOD, MUSIC_END, MUSIC_START  # noqa: E402
-from prompt import parse_caption, tokenizer_from_checkpoint  # noqa: E402
+from model import ABC_END, ABC_START, CODEC_OFFSET, MUSIC_END, MUSIC_START  # noqa: E402
+from prompt import (build_prompt_ids, check_score_ids, parse_caption, score_text,  # noqa: E402
+                    target_loss_mask, tokenizer_from_checkpoint)
 
 KIT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
@@ -262,19 +267,52 @@ def track_weights(folder):
         return out
 
 
-def no_ar_stems(folder):
-    """HERESY 1643: the tracks the set's dataset.json marks "no_ar": true (a voice whose words are not known): the NAR's lesson only"""
+def _dataset_tracks(folder):
     path = os.path.join(folder, "dataset.json")
     if not os.path.isfile(path):
-        return set()
+        return {}
     with open(path, encoding="utf-8") as f:
-        return {str(t.get("stem")) for t in json.load(f).get("tracks", []) if t.get("no_ar")}
+        return {str(t.get("stem")): t for t in json.load(f).get("tracks", []) if t.get("stem") is not None}
 
 
-def ar_losses(model, embeds, ids, chunk, kl_on, loras):
+def no_ar_stems(folder):
+    """HERESY 1643: the tracks the set's dataset.json marks "no_ar": true (a voice whose words are not known): the NAR's lesson only"""
+    return {stem for stem, t in _dataset_tracks(folder).items() if t.get("no_ar")}
+
+
+def prompt_parts(tok, style, lyrics, cot, score, what="the score"):
+    """(head ids through ABC_START, score ids or None) from build_prompt_ids, so the layout cannot drift from inference.
+
+    off ignores score and returns the Direct head. full and melody encode the score and check it stays in the text vocabulary.
+    """
+    abc = None
+    if cot != "off":
+        abc = check_score_ids(tok.encode(score), what)
+    ids = build_prompt_ids(tok.encode, cot, style, lyrics, abc)
+    if ids[-2:] != [ABC_END, MUSIC_START]:
+        raise ValueError("prompt does not close with ABC_END, MUSIC_START")
+    head = ids[:len(ids) - len(abc or []) - 2]
+    if not head or head[-1] != ABC_START:
+        raise ValueError("prompt head does not end at ABC_START")
+    return head, abc
+
+
+def ar_losses(model, embeds, ids, chunk, kl_on, loras, mask=None):
     """Next-token CE over `ids` (the positions after the prefix head), and KL(base ‖ adapted) when asked;
-    logits recomputed per chunk under checkpointing, so [n, vocab] in float32 never exists at once."""
+    logits recomputed per chunk under checkpointing, so [n, vocab] in float32 never exists at once.
+    mask: bool per target, True where the loss counts. None, or all True, is the average Direct has trained with.
+    A score step masks MUSIC_START (prompt.target_loss_mask) and the average is over the positions that count."""
     n = ids.shape[0]
+    if mask is None:
+        mask = torch.ones(n, dtype=torch.bool, device=ids.device)
+    else:
+        mask = mask.to(device=ids.device).bool()
+        if mask.shape[0] != n:
+            raise ValueError(f"loss mask {mask.shape[0]} against {n} targets")
+    kept = int(mask.sum().item())
+    if kept == 0:
+        z = torch.zeros((), device=ids.device)
+        return z, (z if kl_on else None)
     _, hidden = model.ar.prefill(embeds, return_hidden=True)
     hidden = hidden[0, -n - 1: -1]
     base = None
@@ -287,23 +325,26 @@ def ar_losses(model, embeds, ids, chunk, kl_on, loras):
         finally:
             set_enabled(loras, True)
     head = model.ar.model.lm_head
+    weight = mask.float()
 
-    def piece(h, tgt, bh):
+    def piece(h, tgt, bh, w):
         logits = head(h).float()
-        ce = F.cross_entropy(logits, tgt, reduction="sum")
+        ce = (F.cross_entropy(logits, tgt, reduction="none") * w).sum()
         if bh is None:
             return ce, ce.new_zeros(())
         with torch.no_grad():
             base_logp = torch.log_softmax(head(bh).float(), -1)
-        return ce, F.kl_div(torch.log_softmax(logits, -1), base_logp, log_target=True, reduction="sum")
+        kl = (F.kl_div(torch.log_softmax(logits, -1), base_logp, log_target=True, reduction="none").sum(-1) * w).sum()
+        return ce, kl
 
     ce_sum = hidden.new_zeros((), dtype=torch.float32)
     kl_sum = hidden.new_zeros((), dtype=torch.float32)
     for s in range(0, n, chunk):
         ce, kl = torch.utils.checkpoint.checkpoint(piece, hidden[s: s + chunk], ids[s: s + chunk],
-                                                   None if base is None else base[s: s + chunk], use_reentrant=False)
+                                                   None if base is None else base[s: s + chunk], weight[s: s + chunk],
+                                                   use_reentrant=False)
         ce_sum, kl_sum = ce_sum + ce, kl_sum + kl
-    return ce_sum / n, (kl_sum / n if kl_on else None)
+    return ce_sum / kept, (kl_sum / kept if kl_on else None)
 
 
 def main():
@@ -333,12 +374,17 @@ def main():
     if cot not in ("off", "full", "melody"):
         raise ValueError(f"cot {cot!r}: off, full or melody")
     sep = bool(cfg["do_separation"])
+    meta = _dataset_tracks(cfg["dataset"])                # scores kept on the set, read before any sheet is made
     if main0:                                             # the set's cache first, then the model: never both on the card
         lack = latent_cache.missing(cfg["dataset"])
         if lack:
             latent_cache.build(cfg["dataset"], cfg["checkpoint"], KIT, dev, lack)
-        if cot != "off" and latent_cache.missing_sheets(cfg["dataset"], cot, cfg["transcriber"]):
-            latent_cache.sheets(cfg["dataset"], cot, KIT, transcriber=cfg["transcriber"])
+        if cot != "off":
+            # a score kept on the track is the one inference would be handed; it is not transcribed over
+            todo = [s for s in latent_cache.missing_sheets(cfg["dataset"], cot, cfg["transcriber"])
+                    if score_text(meta.get(s), cot, None)[1] != "metadata"]
+            if todo:
+                latent_cache.sheets(cfg["dataset"], cot, KIT, only=todo, transcriber=cfg["transcriber"])
         if sep and latent_cache.missing_stems(cfg["dataset"], cot, cfg["transcriber"]):     # HERESY 1422: the stems after the mix's cache (cut to its length)
             latent_cache.stems(cfg["dataset"], KIT, cot, dev, transcriber=cfg["transcriber"])
     if dist:
@@ -367,22 +413,28 @@ def main():
     train_idx = [i for i in range(len(items)) if i not in held]
     order = [i for i in train_idx for _ in range(weights.get(items[i][0], 1))]   # HERESY 1662: an epoch, each track as many times as its weight
     tok = tokenizer_from_checkpoint(cfg["checkpoint"])
-    heads = {it[0]: torch.tensor(tok.prefix_head_ids(**parse_caption(it[1]), cot="off"), dtype=torch.long) for it in items}
-    heads_cot, abcs = {}, {}                              # HERESY 1420: score mode's prompt and sheet per track
+    heads = {}
+    for it in items:
+        c = parse_caption(it[1])
+        head, _ = prompt_parts(tok, c["style"], c["lyrics"], "off", None)
+        heads[it[0]] = torch.tensor(head, dtype=torch.long)
+    heads_cot, abcs, abc_from = {}, {}, {}                # HERESY 1420: score mode's prompt and score per track
     if cot != "off":
         for it in items:                                  # HERESY 1662: the name and caption alone (a lazy track's latents stay on disk)
             name, cap = it[0], it[1]
-            text = latent_cache.read_sheet(cfg["dataset"], name, cot, cfg["transcriber"])
+            text, src = score_text(meta.get(name), cot, latent_cache.read_sheet(cfg["dataset"], name, cot, cfg["transcriber"]))
             if text is None:
                 continue
-            ids = tok.encode(text)
-            if any(not 0 <= t < EOD for t in ids):
-                raise ValueError(f"the sheet of {name} leaves the ordinary text vocabulary")
-            abcs[name] = torch.tensor(ids, dtype=torch.long)
-            heads_cot[name] = torch.tensor(tok.prefix_head_ids(**parse_caption(cap), cot=cot), dtype=torch.long)
-        say(f"score mode {cot}: {len(abcs)} of {len(items)} tracks with a sheet" +
+            c = parse_caption(cap)
+            head, abc = prompt_parts(tok, c["style"], c["lyrics"], cot, text, f"the score of {name}")
+            abcs[name] = torch.tensor(abc, dtype=torch.long)
+            heads_cot[name] = torch.tensor(head, dtype=torch.long)
+            abc_from[name] = src
+        n_meta = sum(1 for src in abc_from.values() if src == "metadata")
+        say(f"score mode {cot}: {len(abcs)} of {len(items)} tracks with a score" +
+            (f" ({n_meta} kept on the set, {len(abcs) - n_meta} transcribed)" if abcs else "") +
             (f" ({len(items) - len(abcs)} without: Direct always)" if len(abcs) < len(items) else "") +
-            f"; a sheet dropped on {cfg['abc_dropout']:.0%} of the steps")
+            f"; a score dropped on {cfg['abc_dropout']:.0%} of the steps")
     # HERESY 1815 (Viktor 28.10.2026: «ставим замерщика и сторожа на Тренера для пиковых на следующие раны»): each track's AR input as micro
     # builds it (the head, the sheet, [ABC_END, MUSIC_START], the song part the AR's loss sees, [MUSIC_END] when that is the whole song), read
     # from the caches' headers; over ar_cap_tokens a track trains Direct, still over its song part is cut, the names in ar-capped.txt
@@ -427,14 +479,13 @@ def main():
             p = parse_caption(cap)
             for v in SEP_W:
                 style, lyrics = ("", p["lyrics"]) if v == "vocals" else (p["style"], "")
-                stem_heads[v][name] = torch.tensor(tok.prefix_head_ids(style, lyrics, cot="off"), dtype=torch.long)
+                stem_heads[v][name] = torch.tensor(prompt_parts(tok, style, lyrics, "off", None)[0], dtype=torch.long)
+                # a stem's score is its own transcription; the mix's score is not the voice's or the band's
                 text = latent_cache.read_stem_sheet(cfg["dataset"], name, v, cot, cfg["transcriber"]) if cot != "off" else None
                 if text is not None:
-                    ids = tok.encode(text)
-                    if any(not 0 <= t < EOD for t in ids):
-                        raise ValueError(f"the {v} sheet of {name} leaves the ordinary text vocabulary")
-                    stem_sheets[v][name] = torch.tensor(ids, dtype=torch.long)
-                    stem_heads_cot[v][name] = torch.tensor(tok.prefix_head_ids(style, lyrics, cot=cot), dtype=torch.long)
+                    head, abc = prompt_parts(tok, style, lyrics, cot, text, f"the {v} score of {name}")
+                    stem_sheets[v][name] = torch.tensor(abc, dtype=torch.long)
+                    stem_heads_cot[v][name] = torch.tensor(head, dtype=torch.long)
         say(f"separation: {len(stem_tok)} tracks split, the AR's lesson (mix + {SEP_W['vocals']}·vocals + {SEP_W['music']}·music) / "
             f"{1 + sum(SEP_W.values())}" + (f"; stem sheets {len(stem_sheets['vocals'])} / {len(stem_sheets['music'])}" if cot != "off" else ""))
     model = load_model(cfg["checkpoint"], dev, overlay=cfg.get("overlay") or None)   # HERESY 2321: a base of any depth, a save laid over it
@@ -724,22 +775,26 @@ def main():
         song = tokens.to(dev).long()
 
         def inputs(tok_ids, end_token, head=head, sheet=sheet):
+            n_score = int(sheet.shape[0]) if sheet is not None else 0
             parts = ([sheet.to(dev)] if sheet is not None else []) + [torch.tensor([ABC_END, MUSIC_START], device=dev), tok_ids + CODEC_OFFSET]
             if end_token:
                 parts.append(torch.tensor([MUSIC_END], device=dev))
             ids = torch.cat(parts)
-            return torch.cat([head, model.ar.embed(ids)], 0)[None], ids
+            # a score step: the score and ABC_END count, MUSIC_START does not; Direct counts every target
+            mask = torch.tensor(target_loss_mask(n_score, int(tok_ids.shape[0]), sheet is not None, end_token),
+                                dtype=torch.bool, device=dev)
+            return torch.cat([head, model.ar.embed(ids)], 0)[None], ids, mask
 
-        embeds, ids = inputs(song[start:end], True)
+        embeds, ids, mask = inputs(song[start:end], True)
         ce = kl = None
         if train_ar and name not in no_ar:                  # HERESY 1643: a track without the AR's lesson
             if start == 0 and end == total and name not in ar_cut:
-                ce, kl = ar_losses(model, embeds, ids, cfg["chunk"], kl_on, loras)
+                ce, kl = ar_losses(model, embeds, ids, cfg["chunk"], kl_on, loras, mask)
             else:                                           # the AR's loss sees the song from its start
                 limit = total if cfg["ar_max_tokens"] <= 0 else min(total, cfg["ar_max_tokens"])
                 limit = min(limit, ar_cut.get(name, limit))   # HERESY 1815: over the cap even as Direct, its song part cut
-                ar_embeds, ar_ids = inputs(song[:limit], limit == total)
-                ce, kl = ar_losses(model, ar_embeds, ar_ids, cfg["chunk"], kl_on, loras)
+                ar_embeds, ar_ids, ar_mask = inputs(song[:limit], limit == total)
+                ce, kl = ar_losses(model, ar_embeds, ar_ids, cfg["chunk"], kl_on, loras, ar_mask)
         with torch.no_grad():
             cache, _ = model.ar.prefill(embeds)
         cache = [(k.detach(), v.detach()) for k, v in cache]
@@ -766,8 +821,8 @@ def main():
                 s_head = model.ar.embed((stem_heads_cot[v] if s_sheet is not None else stem_heads[v])[name].to(dev))
                 s_song = stem_tok[name][v].to(dev).long()
                 s_lim = s_song.shape[0] if cfg["ar_max_tokens"] <= 0 else min(s_song.shape[0], cfg["ar_max_tokens"])
-                s_embeds, s_ids = inputs(s_song[:s_lim], s_lim == s_song.shape[0], head=s_head, sheet=s_sheet)
-                s_ce, s_kl = ar_losses(model, s_embeds, s_ids, cfg["chunk"], kl_on, loras)
+                s_embeds, s_ids, s_mask = inputs(s_song[:s_lim], s_lim == s_song.shape[0], head=s_head, sheet=s_sheet)
+                s_ce, s_kl = ar_losses(model, s_embeds, s_ids, cfg["chunk"], kl_on, loras, s_mask)
                 part = cfg["ar_loss_weight"] * share * SEP_W[v] * s_ce
                 if s_kl is not None:
                     part = part + cfg["ar_kl_weight"] * kl_share * s_kl
@@ -775,7 +830,7 @@ def main():
                 (part / accum).backward()
                 total_loss += part.item()
                 stem_ce[v] = s_ce.item()
-                del s_embeds, s_ids, s_ce, s_kl, part
+                del s_embeds, s_ids, s_mask, s_ce, s_kl, part
         values = {"loss/loss": total_loss, "loss/flow": fv}    # loss/loss is the whole sum, as AI-Toolkit logs it
         if abcs:
             values["score/sheet"] = 1.0 if sheet is not None else 0.0        # HERESY 1420: which prompt the step had

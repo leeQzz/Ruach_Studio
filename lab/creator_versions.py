@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 LOCK = threading.Lock()
-WORDS = ("title", "style", "lyrics", "abc")
+WORDS = ("title", "style", "lyrics", "abc", "exclude_styles")   # excluded styles ride with the prompt, so a later version can put them back
 
 
 def _dir(kit, scope=""):

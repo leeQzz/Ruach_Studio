@@ -54,6 +54,16 @@ RuachI18n.add("he", {
 "Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.": "שלם, ברירת המחדל: חצי הצליל שומע שיר דרך חלון אחד של 24,576 שורות (קודם הסגנון, המילים והפרטיטורה, ואחר כך שתי שורות לכל פריים של מוזיקה), ולכן השיר נשאר בתוך מה שהחלון מכיל ולעולם אינו מודבק. עם ההקשר המלא זה בערך 6 עד 7¾ דקות, לפי אורך המילים והפרטיטורה; פחות שורות הקשר בהגדרות המנוע (כרטיס עם פחות זיכרון) מקצרות אותו, ואורך מרבי הוא הגבול השני. בחלקים, ניסיוני, לשירים ארוכים באמת: המוזיקה ממשיכה מעבר לחלון, וחצי הצליל פותר אותה בשני חלונות או יותר ששומעים 6 s מעבר לכל חיבור ומתמזגים שם במשך 4 s; עדיין אפשר לשמוע חיבור, בערך 1 dB שקט יותר במשך כמה שניות (נמדד ב-07.11.2026). המדרגות שלמעלה פותרות ממילא בחלקים משלהן. טייק שכבר ארוך מחלון אחד ממשיך בחלקים כששרים אותו מחדש מרגע מסוים, כפי שנעשה.",
 "Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).": "אורך מרבי {0} עובר כאן חלון אחד (בערך {1}–{2}, לפי המילים והפרטיטורה): השיר נעצר במקום שבו החלון נגמר. לשיר ארוך יותר: שירים ארוכים · בחלקים (ניסיוני).",
 "Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)": "שלם עד {0}: שם נגמר חלון אחד של חצי הצליל. לשיר ארוך יותר: שירים ארוכים · בחלקים (ניסיוני)",
+// long songs: Pieces is the default past one window (test-nar-seam)
+"Whole · one window": "שלם · חלון אחד",
+"Pieces · joined": "קטעים · מחוברים",
+"Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).": "האורך המרבי {0} עובר כאן חלון אחד (בערך {1}–{2}, לפי המילים והפרטיטורה).",
+"Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.": "קטעים פועל: המוזיקה רצה עד האורך המרבי והצליל מחובר (חפיפה של 6 שניות, מעבר של 4 שניות). שלם עוצר את המוזיקה בחלון.",
+"Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.": "שלם עוצר את המוזיקה במקום שבו החלון נגמר. בחרו קטעים כדי להגיע לאורך המרבי; הצליל אז מחובר.",
+"The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.": "השיר נעצר במקום שבו החלון נגמר. קטעים אינו ברירת המחדל: בדיקות התפר לא עברו. בחרו קטעים רק אם אתם מקבלים חיבור שלא נבדק.",
+"Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.": "קטעים מחבר את הצליל מעבר לחלון הזה. בדיקות התפר לא עברו: חיבור יכול להיות שגוי. שלם עוצר את המוזיקה בחלון.",
+"Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.": "שלם עד {0}: חלון אחד של חצי הצליל נגמר שם. בחרו קטעים כדי להריץ את המוזיקה עד האורך המרבי ולחבר את הצליל.",
+"Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.": "שלם שומר את הצליל בחלון אחד: הסגנון, המילים והפרטיטורה, ואחר כך שתי שורות לכל פריים. המוזיקה נעצרת בסוף החלון הזה — בערך 6 עד 7¾ דקות עם ההקשר המלא של 24,576 שורות, פחות כשהמילים והפרטיטורה ארוכות או שההקשר של המנוע קטן יותר. קטעים נותן למוזיקה לרוץ עד האורך המרבי (8:00 כברירת מחדל; ההקשר של מודל השפה עדיין התקרה) ופותר את הצליל בחלונות שווים ששומעים 6 שניות מעבר לכל תפר ועוברים ב-4 שניות. משקלי החלונות מסתכמים לאחת, כך שהתפר לא נופל; תפר עדיין יכול לשבת בערך 1 dB שקט יותר לכמה שניות (נמדד ב-07.11.2026). כשהאורך המרבי עובר חלון אחד, קטעים הוא ברירת המחדל. בחרו שלם כדי לעצור בחלון. הסולם למעלה משתמש בגודל קטע משלו. הקלטה שכבר ארוכה מחלון אחד ממשיכה בקטעים כששרים אותה מחדש מרגע.",
 "held whole at {0} (one window)": "שלם עד {0} (חלון אחד)",
 // writer lane 12.11.2026 (HERESY 2463–2473): the Writer on the Intel Arc, its window, the draft's guards, Stop, the write target, the key's place
 "{#0} lines differ from now": "{0} שורות שונות מעכשיו",
@@ -937,6 +947,13 @@ RuachI18n.add("he", {
 "has": "יש",
 "stems": "סטמים",
 "debuzz": "אנטי-זמזום",
+"Frame buzz": "זמזום פריימים",
+"Take the 25 Hz buzz out": "להוציא את הזמזום של 25 Hz",
+"YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "המפענח של YuE2 כותב את הצליל בפריימים של 1920 דגימות, 25 בשנייה, ומשאיר בגבוהים אדוות הגבר, שנשמעת כזמזום ב-25 Hz ובכפולות שלו. פתוח, ברירת המחדל: הטייק ששומעים ומורידים איבד את האדווה (80 %, המידה שנמדדה), והקובץ של המפענח, פסגות שלמות, נשמר לצדו בשם audio.raw.wav. סגור: הטייק נשאר כפי שהמפענח כתב אותו, פסגות שלמות. WAV בלבד; קובץ MP3 כבר מקודד ונשאר כמו שהוא.",
+"Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "הזמזום יוצא רק מ-WAV. קובץ MP3 נשאר כפי שהמפענח כתב אותו.",
+"MP3, left encoded": "MP3, נשאר מקודד",
+"Frame buzz stays: the take is the decoder's own, peaks whole.": "זמזום הפריימים נשאר: הטייק הוא של המפענח, פסגות שלמות.",
+"on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "פתוח כברירת מחדל ב-WAV: אדוות 25 Hz יוצאת מהגבוהים, ו-audio.raw.wav שומר את קובץ המפענח. סגור, הקובץ הזה נשאר הטייק",
 "remaster": "רימאסטר",
 "upscale": "אפסקייל",
 "Select all": "בחירת הכול",
@@ -5831,7 +5848,7 @@ RuachI18n.add("he", {
 "{0} cloned: its window holds its own settings": "{0} שוכפל: החלון שלו שומר הגדרות משלו",
 "Delete the clone «{0}»? Its settings go with it.": "למחוק את השכפול \"{0}\"? ההגדרות שלו יימחקו איתו.",
 "Eight clones of one step are enough": "שמונה שכפולים של שלב אחד מספיקים",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "כל לחיצה על \"יצירת שיר\" (Generate) שומרת את הסגנון, המילים והפרטיטורה של הכותרת הזאת בנפרד מהטייקים: הגרסאות שלה, השוואה בין שתיים, אחת בחזרה לטופס",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "כל לחיצה על \"יצירת שיר\" (Generate) שומרת את הסגנון, הסגנונות להחריג, המילים והפרטיטורה של הכותרת הזאת בנפרד מהטייקים: הגרסאות שלה, השוואה בין שתיים, אחת בחזרה לטופס",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "המילים של כל לחיצה על \"יצירת שיר\" (Generate), שמורות תחת הכותרת שלהן בנפרד מהטייקים: טייק שנמחק אף פעם לא לוקח אותן איתו",
 "Musician's versions": "גרסאות המוזיקאי",
 "The Musician's version was not kept: {0}": "גרסת המוזיקאי לא נשמרה: {0}",
@@ -5848,7 +5865,7 @@ RuachI18n.add("he", {
 "Trash ({0})": "פח ({0})",
 "Bring back": "שחזור",
 "deleted from the library; its words are kept here": "נמחק מהספרייה; המילים שלו שמורות כאן",
-"Its title, style, lyrics and score into the Musician's form": "הכותרת, הסגנון, המילים והפרטיטורה שלה אל הטופס של המוזיקאי",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "הכותרת, הסגנון, הסגנונות להחריג, המילים והפרטיטורה שלה אל הטופס של המוזיקאי",
 "★ Starred": "★ מסומן בכוכב",
 "☆ Star": "☆ סימון בכוכב",
 "Label…": "תווית…",
@@ -5864,7 +5881,7 @@ RuachI18n.add("he", {
 "Delete version #{0}?": "למחוק את גרסה #{0}?",
 "It goes into this title's trash, from where it comes back.": "היא עוברת לפח של הכותרת הזאת, ומשם אפשר להחזיר אותה.",
 "Put version #{0} into the Musician's form?": "להכניס את גרסה #{0} לטופס של המוזיקאי?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "הכותרת, הסגנון, המילים והפרטיטורה שנמצאים שם עכשיו יוחלפו. מה שנוצר מהם כבר שמור כאן.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "הכותרת, הסגנון, הסגנונות להחריג, המילים והפרטיטורה שנמצאים שם עכשיו יוחלפו. מה שנוצר מהם כבר שמור כאן.",
 "Version #{0} is in the form": "גרסה #{0} בטופס",
 "No version is kept yet: every Generate keeps its words here": "עדיין לא נשמרה אף גרסה: כל לחיצה על \"יצירת שיר\" (Generate) שומרת כאן את המילים שלה",
 "The Musician's versions": "גרסאות המוזיקאי",
@@ -9167,4 +9184,13 @@ RuachI18n.add("he", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("he", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "ה-VAE שבו מפוענח שיר כשהבקשה שלו לא נוקבת באף אחד (פרומפטים שמורים, לקוחות אחרים). כפתורי ה-VAE בטופס בוחרים אותו לכל שיר, ושיר גמור יכול לקבל אחר מהעמוד שלו."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("he", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles לא שימש הפעם: הנחיה 1.0 משאירה ענף אחד",
+"Exclude styles": "סגנונות להחריג",
+"drones, beats, drums…": "drones, beats, drums…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "מה שהשיר לא צריך להכיל. המעבר הבלתי מותנה של ההנחיה נושא את הסגנונות האלה במקום סגנון ריק, והשיר נדחף מהם. ריק — המעבר נשאר כפי שהיה."
 });

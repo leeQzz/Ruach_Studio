@@ -225,7 +225,7 @@ DEFAULTS = {"style": "", "lyrics": "", "abc": "", "cot": "full", "duration": 360
             "steps": 32, "lm_batch_size": 1, "synth_batch_size": 1, "abc_sampling": ABC_SAMPLING,
             "semantic_sampling": SEMANTIC_SAMPLING, "semantic_tokens": "", "cfg_scale": -1.0,
             "output_format": "mp3", "peak_clip": 0, "mp3_bitrate": 128, "title": "", "vae": "",
-            "sliders": [], "loras": [], "plan_only": False, "parent": ""}
+            "sliders": [], "loras": [], "plan_only": False, "parent": "", "debuzz": True}
 
 SCORE_FULL = """X:1
 T:
@@ -704,10 +704,12 @@ def parse_request(body, mock):
             req[key] = value
     if raw.get("nar_ladder") is True:                  # HERESY 1768: the decode ladder, kept as yue-server keeps it (only when on)
         req["nar_ladder"] = True
-    if raw.get("nar_pieces") is True:                  # HERESY 2509: past one window in pieces, kept the same way
-        req["nar_pieces"] = True
+    if isinstance(raw.get("nar_pieces"), bool):       # HERESY 2509: a said true or false is kept. Left out stays off here; the real engine joins when the length is past one window
+        req["nar_pieces"] = raw["nar_pieces"]
     if isinstance(raw.get("instrumental"), bool):      # HERESY 2153: the Creator's box, kept as yue-server keeps it (only when the request says it)
         req["instrumental"] = raw["instrumental"]
+    if "debuzz" in raw and not isinstance(raw["debuzz"], bool):   # the 25 Hz buzz out of a WAV take; true unless the request says false
+        return None, "debuzz is true or false"
     if req["cot"] not in ("full", "melody", "off"):
         return None, "cot must be full, melody or off"
     if req["output_format"] not in ("mp3", "wav16", "wav24", "wav32"):

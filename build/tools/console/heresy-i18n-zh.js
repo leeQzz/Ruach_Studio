@@ -38,6 +38,16 @@ RuachI18n.add("zh", {
 "Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.": "整首（默认）：声音一半通过一个 24,576 行的窗口来听一首歌（先是风格、歌词和乐谱，然后每一帧音乐占两行），所以歌曲只能在这个窗口容纳的长度之内，绝不拼接。在完整上下文下，这大约是 6 到 7¾ 分钟，取决于歌词和乐谱的长度；在引擎设置中减少上下文行数（显存较少的显卡）会让它更短，最大时长是另一个上限。分段（实验性，适合真正很长的歌）：音乐越过窗口继续，声音一半用两个或更多窗口来求解，每个窗口听到每个接缝之后 6 s，并在那里用 4 s 交叉淡化；接缝仍可能听得出来，大约有几秒钟低 1 dB（2026 年 11 月 7 日测量）。上面的阶梯本来就按自己的分段求解。已经比一个窗口更长的录音，从某一时刻重新演唱时会照它原来的方式分段继续。",
 "Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).": "最大时长 {0} 在这里超出一个窗口（约 {1}–{2}，取决于歌词和乐谱）：歌曲会在窗口结束处停止。要更长：长歌曲 · 分段（实验性）。",
 "Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)": "整首到 {0}：声音一半的一个窗口在此结束。要更长：长歌曲 · 分段（实验性）",
+// long songs: Pieces is the default past one window (test-nar-seam)
+"Whole · one window": "整首 · 一个窗口",
+"Pieces · joined": "分段 · 拼接",
+"Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).": "最大时长 {0} 在这里超出一个窗口（约 {1}–{2}，取决于歌词和乐谱）。",
+"Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.": "分段已开启：音乐唱到最大时长，声音被拼接（重叠 6 秒，交叉淡化 4 秒）。整首会在窗口处停下。",
+"Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.": "整首会在窗口结束处停下。要唱到最大时长，请选分段；声音随后会被拼接。",
+"The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.": "歌曲会在窗口结束处停止。分段不是默认：接缝检查没有通过。只有在你接受未经检查的拼接时才选分段。",
+"Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.": "分段会在窗口之后拼接声音。接缝检查没有通过：拼接可能不对。整首会在窗口处停下。",
+"Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.": "整首到 {0}：声音一半的一个窗口在此结束。选分段可让音乐唱到最大时长并拼接声音。",
+"Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.": "整首把声音留在一个窗口里：先是风格、歌词和乐谱，然后每一帧占两行。音乐在这个窗口结束时停止——完整上下文 24,576 行时大约 6 到 7¾ 分钟；歌词和乐谱很长，或引擎上下文更小，就会更短。分段让音乐一直唱到最大时长（默认 8:00；语言模型的上下文仍是上限），并用均匀的窗口求解声音：每个接缝后再听 6 秒，用 4 秒交叉淡化。各窗口的权重加起来是 1，所以接缝不会掉音；接缝处仍可能有几秒大约低 1 dB（2026 年 11 月 7 日测量）。最大时长超出一个窗口时，分段是默认。选整首就会停在窗口处。上面的阶梯用自己的分段长度。已经比一个窗口更长的录音，从某一时刻重新演唱时会分段继续。",
 "held whole at {0} (one window)": "整首到 {0}（一个窗口）",
 // writer lane 12.11.2026 (HERESY 2463–2473): the Writer on the Intel Arc, its window, the draft's guards, Stop, the write target, the key's place
 "{#0} lines differ from now": "与现在不同的行:{0}",
@@ -947,6 +957,13 @@ RuachI18n.add("zh", {
 "has": "包含",
 "stems": "分轨",
 "debuzz": "去嗡声",
+"Frame buzz": "帧嗡声",
+"Take the 25 Hz buzz out": "去掉 25 Hz 的嗡声",
+"YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "YuE2 的解码器按每帧 1920 个采样写声音，一秒 25 帧，并在高频留下增益起伏，听起来是 25 Hz 及其倍数的嗡声。打开（默认）：你听到和下载的成片已去掉这层起伏（80%，测过的程度），解码器自己的整段峰值文件留在旁边，名为 audio.raw.wav。关闭：成片保持解码器写出的样子，峰值完整。只对 WAV；MP3 已经编码，保持原样。",
+"Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "去嗡声只处理 WAV。MP3 保持解码器写出的原样。",
+"MP3, left encoded": "MP3，未去嗡",
+"Frame buzz stays: the take is the decoder's own, peaks whole.": "帧嗡声留下：成片就是解码器自己的，峰值完整。",
+"on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "对 WAV 默认打开：高频里的 25 Hz 起伏被去掉，audio.raw.wav 留着解码器自己的文件。关闭则成片就是那个文件",
 "remaster": "重新母带",
 "upscale": "超分",
 "Select all": "全选",
@@ -5925,7 +5942,7 @@ RuachI18n.add("zh", {
 "{0} cloned: its window holds its own settings": "已克隆{0}：它的窗口保存自己的设置",
 "Delete the clone «{0}»? Its settings go with it.": "删除克隆「{0}」？它的设置会一起删除。",
 "Eight clones of one step are enough": "一个步骤最多八个克隆",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "每次 Generate 都会把这个标题的风格、歌词和乐谱与录音分开保存：它的版本、两版的差异、把某一版放回表单",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "每次 Generate 都会把这个标题的风格、排除风格、歌词和乐谱与录音分开保存：它的版本、两版的差异、把某一版放回表单",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "每次 Generate 的文字，按标题与录音分开保存：删除录音也不会带走这些文字",
 "Musician's versions": "音乐人的版本",
 "The Musician's version was not kept: {0}": "未能保存音乐人的版本：{0}",
@@ -5942,7 +5959,7 @@ RuachI18n.add("zh", {
 "Trash ({0})": "回收站（{0}）",
 "Bring back": "恢复",
 "deleted from the library; its words are kept here": "已从库中删除；它的文字保存在这里",
-"Its title, style, lyrics and score into the Musician's form": "把它的标题、风格、歌词和乐谱放进音乐人的表单",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "把它的标题、风格、排除风格、歌词和乐谱放进音乐人的表单",
 "★ Starred": "★ 已加星",
 "☆ Star": "☆ 加星",
 "Label…": "标签…",
@@ -5958,7 +5975,7 @@ RuachI18n.add("zh", {
 "Delete version #{0}?": "删除版本 #{0}？",
 "It goes into this title's trash, from where it comes back.": "它会进入这个标题的回收站，可以从那里恢复。",
 "Put version #{0} into the Musician's form?": "把版本 #{0} 放进音乐人的表单？",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "表单里现在的标题、风格、歌词和乐谱会被替换。由它们生成的内容已经保存在这里。",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "表单里现在的标题、风格、排除风格、歌词和乐谱会被替换。由它们生成的内容已经保存在这里。",
 "Version #{0} is in the form": "版本 #{0} 已在表单中",
 "No version is kept yet: every Generate keeps its words here": "还没有版本：每次 Generate 都会在这里保存它的文字",
 "The Musician's versions": "音乐人的版本",
@@ -9263,4 +9280,13 @@ RuachI18n.add("zh", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("zh", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "当歌曲的请求没有指定 VAE 时，用来解码它的 VAE（已保存的提示词、其他客户端）。表单中的 VAE 按钮按每首歌选择，已完成的歌曲可在其页面换用另一个。"
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("zh", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "本次未使用 exclude_styles：引导为 1.0 时只有一条分支",
+"Exclude styles": "排除风格",
+"drones, beats, drums…": "持续音、节拍、鼓…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "这首歌不该有的东西。引导的无条件分支带着这些风格，而不是空风格，从而把歌曲从它们推开。留空则该分支保持原样。"
 });

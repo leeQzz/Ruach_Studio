@@ -42,21 +42,37 @@ def call(path, body=None, timeout=60):
 @mcp.tool()
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
-                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "",
+                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
+                  exclude_styles: str = "", debuzz: bool = True,
                   gloss_gate: bool = False, gloss_threshold: float = 0.35, gloss_attempts: int = 3,
-                  wait: bool = True) -> dict:
+                  nar_pieces: bool | None = None) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
-    lyrics: with section tags on their own lines ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
+    exclude_styles: what the song must not have (drones, beats, drums). The guidance's unconditional pass carries
+    these instead of an empty style. Empty leaves that pass as it is. When guidance is 1.0 and there is no separate
+    lyrics scale, the answer's exclude_warning says this run did not use the exclusion.
+    debuzz: true (the default) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the decoder's
+    peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it.
+    lyrics: with section tags on their own lines
+    ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
-    480; 0: 180, or the MIDI file's own length). instrumental: no voice. workspace: the Librarian's workspace it lands
+    480; 0: 180, or the MIDI file's own length). nar_pieces left out (the default): past one sound window, about 6 to
+    7¾ minutes at a full context, the music runs to that duration and the sound is joined; a shorter song stays one
+    window. true and false are forwarded (false stops the music at the window). An old caller that omits it and asks
+    past the window is no longer cut there; 180 seconds, the duration used when this argument's duration is 0, still
+    fits. instrumental: no voice. workspace: the Librarian's workspace it lands
     in. midi_file: a standard MIDI file on this machine whose notes become the song's melody (the top track sung, the
     second played, one line a voice); the answer's "score" says how the studio read it (key, tempo, notes kept and
     dropped). midi_key: the key to write it in (Em, Bb…) when the file has none and the studio's guess would not do.
+    debuzz: true (the default) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the decoder's
+    peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it.
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
     job_status. gloss_gate (off unless true): after the song, if the word error is over gloss_threshold (0 to 1),
     draw another music seed and make it again, up to gloss_attempts (1 to 8). The answer's gloss_attempts lists
-    each try; the take kept is the lowest error."""
-    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental}
+    each try; the take kept is the lowest error. exclude_styles and debuzz are both kept."""
+    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental,
+            "debuzz": bool(debuzz)}
+    if str(exclude_styles or "").strip():
+        body["exclude_styles"] = str(exclude_styles).strip()
     if mode:
         body["mode"] = mode
     if midi_file:                                       # HERESY 1145
@@ -76,9 +92,12 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
         body["gloss_gate"] = True
         body["gloss_threshold"] = gloss_threshold
         body["gloss_attempts"] = gloss_attempts
+    if nar_pieces is not None:                          # left out: the API leaves it out, and /synth applies the window default
+        body["nar_pieces"] = nar_pieces
     job = call("/songs", body)
     if not wait or "job" not in job:
         return job
+    notice = job.get("exclude_warning")
     score = job.get("score")
     t0 = time.time()
     while time.time() - t0 < 1800:
@@ -90,6 +109,9 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
                 st["listen"] = URL + "/api/v1/takes/" + st["takes"][0] + "/audio"
             if score:
                 st["score"] = score
+            if notice and not st.get("exclude_warning"):
+                st["exclude_warning"] = notice
+                st["exclude_unused"] = True
             return st
     return {"job": job["job"], "status": "still running after 30 minutes: ask job_status"}
 

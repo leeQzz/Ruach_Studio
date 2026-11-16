@@ -39,6 +39,16 @@ RuachI18n.add("ru", {
 "Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.": "Целиком — по умолчанию: звуковая половина слышит песню через одно окно в 24 576 строк (сначала стиль, лирика и партитура, потом по две строки на каждый кадр музыки), поэтому песня держится в пределах того, что вмещает это окно, и никогда не склеивается. При полном контексте это около 6–7¾ минут, по длине лирики и партитуры; меньше Строк контекста в настройках Движка (карта с меньшей памятью) — и окно короче, а Макс. длина — второй предел. Кусками — экспериментально, для по-настоящему длинных песен: музыка идёт дальше окна, а звуковая половина решает её в двух и более окнах, которые слышат по 6 с за каждым стыком и сходятся там в кроссфейде 4 с; стык всё же может быть слышен — примерно на 1 dB тише несколько секунд (замер 07.11.2026). Лесенка выше и так решает кусками по-своему. Семпл, который уже длиннее одного окна, при перепевке с момента продолжается кусками — так, как был создан.",
 "Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).": "Макс. длина {0} здесь дальше одного окна (около {1}–{2}, по лирике и партитуре): песня остановится там, где кончается окно. Длиннее — Длинные песни · Кусками (экспериментально).",
 "Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)": "Целиком до {0}: там кончается одно окно звуковой половины. Длиннее — Длинные песни · Кусками (экспериментально)",
+// long songs: Pieces is the default past one window (test-nar-seam)
+"Whole · one window": "Целиком · одно окно",
+"Pieces · joined": "Кусками · со швом",
+"Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).": "Максимальная длина {0} здесь больше одного окна (около {1}–{2}, по тексту и партитуре).",
+"Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.": "Кусками включено: музыка идёт до максимальной длины, звук сшит (перекрытие 6 с, кроссфейд 4 с). Целиком останавливает музыку на окне.",
+"Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.": "Целиком останавливает музыку там, где кончается окно. Выберите Кусками, чтобы идти до максимальной длины; звук тогда будет сшит.",
+"The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.": "Песня останавливается там, где кончается окно. Кусками не стоит по умолчанию: проверки шва не прошли. Выбирайте Кусками, только если принимаете непроверенный шов.",
+"Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.": "Кусками сшивает звук за этим окном. Проверки шва не прошли: шов может быть неверен. Целиком останавливает музыку на окне.",
+"Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.": "Целиком до {0}: одно окно звуковой половины кончается здесь. Выберите Кусками, чтобы вести музыку до максимальной длины и сшить звук.",
+"Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.": "Целиком держит звук в одном окне: сначала стиль, текст и партитура, затем две строки на каждый кадр. Музыка останавливается в конце этого окна — около 6–7¾ минут при полном контексте в 24 576 строк, короче, если текст и партитура длинные или контекст движка меньше. Кусками даёт музыке идти до максимальной длины (по умолчанию 8:00; контекст языковой модели всё ещё потолок) и считает звук ровными окнами, которые слышат 6 с за каждым стыком и сходятся кроссфейдом в 4 с. Веса окон в сумме дают единицу, так что шов не проваливается; стык всё же может быть примерно на 1 дБ тише несколько секунд (измерено 07.11.2026). Когда максимальная длина больше одного окна, по умолчанию — Кусками. Целиком останавливает на окне. Лестница выше режет своими кусками. Запись длиннее одного окна при новом пении с какого-то момента продолжается кусками.",
 "held whole at {0} (one window)": "целиком до {0} (одно окно)",
 // writer lane 12.11.2026 (HERESY 2463–2473): the Writer on the Intel Arc, its window, the draft's guards, Stop, the write target, the key's place
 "{#0} lines differ from now": { "one": "{0} строка отличается от нынешней", "few": "{0} строки отличаются от нынешних", "many": "{0} строк отличаются от нынешних", "other": "{0} строки отличаются от нынешних" },
@@ -948,6 +958,13 @@ RuachI18n.add("ru", {
 "has": "есть",
 "stems": "стемы",
 "debuzz": "антигул",
+"Frame buzz": "Кадровый гул",
+"Take the 25 Hz buzz out": "Убрать гул 25 Гц",
+"YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "Декодер YuE2 пишет звук кадрами по 1920 отсчётов, 25 в секунду, и оставляет в верхах волну усиления: её слышно как гул на 25 Гц и кратных. Включено, так и стоит: дубль, который ты слышишь и скачиваешь, уже без этой волны (80 %, мера, которая подошла), а собственный файл декодера, пики целиком, лежит рядом как audio.raw.wav. Выключено: дубль остаётся таким, каким его написал декодер, пики целиком. Только WAV; MP3 уже сжат и остаётся как есть.",
+"Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "Гул снимается только с WAV. MP3 остаётся таким, каким его написал декодер.",
+"MP3, left encoded": "MP3, без снятия гула",
+"Frame buzz stays: the take is the decoder's own, peaks whole.": "Кадровый гул остаётся: дубль — это файл декодера, пики целиком.",
+"on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "для WAV включено по умолчанию: волна 25 Гц уходит из верхов, а audio.raw.wav хранит файл декодера. Выключено — дублем остаётся тот файл",
 "remaster": "ремастер",
 "upscale": "апскейл",
 "Select all": "Выделить все",
@@ -6047,7 +6064,7 @@ RuachI18n.add("ru", {
 "{0} cloned: its window holds its own settings": "{0}: клон готов, его окно держит свои настройки",
 "Delete the clone «{0}»? Its settings go with it.": "Удалить клон «{0}»? Его настройки уйдут с ним.",
 "Eight clones of one step are enough": "Восьми клонов одного шага хватит",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Каждый Generate хранит стиль, лирику и партитуру этого названия отдельно от семплов: его версии, разница двух, любая обратно в форму",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Каждый Generate хранит стиль, исключённые стили, лирику и партитуру этого названия отдельно от семплов: его версии, разница двух, любая обратно в форму",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Слова каждого Generate, сохранённые под своим названием отдельно от семплов: удалённый семпл никогда не уносит их с собой",
 "Musician's versions": "Версии Музыканта",
 "The Musician's version was not kept: {0}": "Версия Музыканта не сохранилась: {0}",
@@ -6064,7 +6081,7 @@ RuachI18n.add("ru", {
 "Trash ({0})": "Корзина ({0})",
 "Bring back": "Вернуть",
 "deleted from the library; its words are kept here": "удалён из библиотеки; его слова сохранены здесь",
-"Its title, style, lyrics and score into the Musician's form": "Её название, стиль, лирика и партитура — в форму Музыканта",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Её название, стиль, исключённые стили, лирика и партитура — в форму Музыканта",
 "★ Starred": "★ Со звездой",
 "☆ Star": "☆ Звезда",
 "Label…": "Метка…",
@@ -6080,7 +6097,7 @@ RuachI18n.add("ru", {
 "Delete version #{0}?": "Удалить версию #{0}?",
 "It goes into this title's trash, from where it comes back.": "Она уйдёт в корзину этого названия, откуда возвращается.",
 "Put version #{0} into the Musician's form?": "Поставить версию #{0} в форму Музыканта?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Название, стиль, лирика и партитура, что там сейчас, будут заменены. Всё, что из них уже сгенерировано, здесь уже сохранено.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Название, стиль, исключённые стили, лирика и партитура, что там сейчас, будут заменены. Всё, что из них уже сгенеровано, здесь уже сохранено.",
 "Version #{0} is in the form": "Версия #{0} в форме",
 "No version is kept yet: every Generate keeps its words here": "Пока ни одной версии: каждый Generate хранит здесь свои слова",
 "The Musician's versions": "Версии Музыканта",
@@ -9384,4 +9401,13 @@ RuachI18n.add("ru", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("ru", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "VAE, которым декодируется песня, когда её запрос не называет никакого (сохранённые промпты, другие клиенты). Кнопки VAE в форме выбирают его для каждой песни, а готовой песне можно дать другой с её страницы."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("ru", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles на этот раз не использован: ведение 1.0 оставляет одну ветвь",
+"Exclude styles": "Исключить стили",
+"drones, beats, drums…": "дроны, биты, барабаны…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Чего в песне быть не должно. Безусловный проход ведения несёт эти стили вместо пустого, и песню от них отталкивает. Пусто — этот проход остаётся как был."
 });

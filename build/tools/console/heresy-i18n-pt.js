@@ -38,6 +38,16 @@ RuachI18n.add("pt", {
 "Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.": "Inteira, o padrão: a metade sonora ouve uma música através de uma janela de 24 576 linhas (primeiro o estilo, a letra e a partitura, depois duas linhas por cada quadro de música), por isso a música fica no que essa janela comporta e nunca é emendada. Com o contexto inteiro são cerca de 6 a 7¾ minutos, conforme o tamanho da letra e da partitura; menos Linhas de contexto nas definições do Motor (uma placa com menos memória) encurtam-na, e a Duração máx. é o outro limite. Em partes, experimental, para músicas realmente longas: a música continua além da janela e a metade sonora resolve-a em duas ou mais janelas que ouvem 6 s além de cada junção e se fundem ali em 4 s; uma junção ainda pode ouvir-se, cerca de 1 dB mais baixa durante alguns segundos (medido em 07.11.2026). A Escada acima já resolve em partes próprias. Um take já mais longo que uma janela continua em partes quando é cantado de novo a partir de um momento, como foi feito.",
 "Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).": "A Duração máx. {0} passa aqui de uma janela (cerca de {1}–{2}, conforme a letra e a partitura): a música para onde a janela termina. Mais longa: Músicas longas · Em partes (experimental).",
 "Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)": "Inteira até {0}: ali termina uma janela da metade sonora. Mais longa: Músicas longas · Em partes (experimental)",
+// long songs: Pieces is the default past one window (test-nar-seam)
+"Whole · one window": "Inteira · uma janela",
+"Pieces · joined": "Pedaços · unidos",
+"Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).": "A duração máxima {0} passa aqui de uma janela (cerca de {1}–{2}, pela letra e pela partitura).",
+"Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.": "Pedaços está ligado: a música vai até à duração máxima e o som é unido (6 s de sobreposição, um crossfade de 4 s). Inteira pára a música na janela.",
+"Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.": "Inteira pára a música onde a janela acaba. Escolhe Pedaços para ir até à duração máxima; o som fica então unido.",
+"The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.": "A canção pára onde a janela acaba. Pedaços não é a predefinição: as verificações da costura não passaram. Escolhe Pedaços só se aceitares uma união por verificar.",
+"Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.": "Pedaços une o som para lá dessa janela. As verificações da costura não passaram: uma união pode estar errada. Inteira pára a música na janela.",
+"Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.": "Inteira até {0}: uma janela da metade do som acaba aí. Escolhe Pedaços para levar a música até à duração máxima e unir o som.",
+"Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.": "Inteira mantém o som numa janela: o estilo, a letra e a partitura, e depois duas linhas por fotograma. A música pára no fim dessa janela — cerca de 6 a 7¾ minutos com o contexto completo de 24 576 linhas, menos se a letra e a partitura forem longas ou o contexto do motor for menor. Pedaços deixa a música ir até à duração máxima (8:00 por predefinição; o contexto do modelo de língua continua a ser o tecto) e resolve o som em janelas iguais que ouvem 6 s para lá de cada junta e se cruzam em 4 s. Os pesos das janelas somam um, por isso a costura não cai; uma junta ainda pode ficar cerca de 1 dB mais baixa por uns segundos (medido a 07.11.2026). Quando a duração máxima passa de uma janela, Pedaços é a predefinição. Inteira pára na janela. A escada acima usa o seu próprio tamanho de pedaço. Uma toma já mais longa que uma janela segue em pedaços quando é cantada de novo a partir de um momento.",
 "held whole at {0} (one window)": "inteira até {0} (uma janela)",
 // writer lane 12.11.2026 (HERESY 2463–2473): the Writer on the Intel Arc, its window, the draft's guards, Stop, the write target, the key's place
 "{#0} lines differ from now": "{0} linhas diferentes de agora",
@@ -947,6 +957,13 @@ RuachI18n.add("pt", {
 "has": "tem",
 "stems": "stems",
 "debuzz": "antizumbido",
+"Frame buzz": "Zumbido de quadro",
+"Take the 25 Hz buzz out": "Tirar o zumbido de 25 Hz",
+"YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "O descodificador do YuE2 escreve o som em quadros de 1920 amostras, 25 por segundo, e deixa nos agudos uma ondulação de ganho, ouvida como um zumbido a 25 Hz e nos seus múltiplos. Ligado, o padrão: a toma que ouves e descarregas perde essa ondulação (80 %, a medida que serve), e o ficheiro do descodificador, picos inteiros, fica ao lado como audio.raw.wav. Desligado: a toma fica como o descodificador a escreveu, picos inteiros. Só WAV; um MP3 já está codificado e fica como está.",
+"Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "Tirar o zumbido só vale para um WAV. Um MP3 fica como o descodificador o escreveu.",
+"MP3, left encoded": "MP3, fica codificado",
+"Frame buzz stays: the take is the decoder's own, peaks whole.": "O zumbido de quadro fica: a toma é a do descodificador, picos inteiros.",
+"on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "ligado por defeito num WAV: a ondulação de 25 Hz sai dos agudos, e audio.raw.wav guarda o ficheiro do descodificador. Desligado, esse ficheiro continua a ser a toma",
 "remaster": "remasterização",
 "upscale": "upscale",
 "Select all": "Selecionar tudo",
@@ -5923,7 +5940,7 @@ RuachI18n.add("pt", {
 "{0} cloned: its window holds its own settings": "{0} clonado: a janela dele guarda os seus próprios ajustes",
 "Delete the clone «{0}»? Its settings go with it.": "Apagar o clone «{0}»? Os ajustes dele vão junto.",
 "Eight clones of one step are enough": "Oito clones de um passo bastam",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Cada Generate guarda o estilo, a letra e a partitura deste título à parte dos takes: suas versões, a diferença de duas, uma de volta ao formulário",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Cada Generate guarda o estilo, os estilos excluídos, a letra e a partitura deste título à parte dos takes: suas versões, a diferença de duas, uma de volta ao formulário",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "As palavras de cada Generate, guardadas sob o seu título à parte dos takes: um take apagado nunca as leva consigo",
 "Musician's versions": "Versões do Músico",
 "The Musician's version was not kept: {0}": "A versão do Músico não foi guardada: {0}",
@@ -5940,7 +5957,7 @@ RuachI18n.add("pt", {
 "Trash ({0})": "Lixeira ({0})",
 "Bring back": "Trazer de volta",
 "deleted from the library; its words are kept here": "apagado da biblioteca; as suas palavras ficam guardadas aqui",
-"Its title, style, lyrics and score into the Musician's form": "O título, o estilo, a letra e a partitura dela no formulário do Músico",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "O título, o estilo, os estilos excluídos, a letra e a partitura dela no formulário do Músico",
 "★ Starred": "★ Com estrela",
 "☆ Star": "☆ Estrela",
 "Label…": "Rótulo…",
@@ -5956,7 +5973,7 @@ RuachI18n.add("pt", {
 "Delete version #{0}?": "Apagar a versão #{0}?",
 "It goes into this title's trash, from where it comes back.": "Ela vai para a lixeira deste título, de onde volta.",
 "Put version #{0} into the Musician's form?": "Pôr a versão #{0} no formulário do Músico?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "O título, o estilo, a letra e a partitura que estão lá agora são substituídos. O que já foi gerado deles está guardado aqui.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "O título, o estilo, os estilos excluídos, a letra e a partitura que estão lá agora são substituídos. O que já foi gerado deles está guardado aqui.",
 "Version #{0} is in the form": "A versão #{0} está no formulário",
 "No version is kept yet: every Generate keeps its words here": "Nenhuma versão ainda: cada Generate guarda aqui as suas palavras",
 "The Musician's versions": "Versões do Músico",
@@ -9267,4 +9284,13 @@ RuachI18n.add("pt", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("pt", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "O VAE com que uma canção é decodificada quando o pedido dela não nomeia nenhum (prompts salvos, outros clientes). Os botões VAE do formulário o escolhem para cada música, e uma música pronta pode receber outro na página dela."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("pt", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles não foi usado: uma orientação de 1.0 mantém um único ramo",
+"Exclude styles": "Excluir estilos",
+"drones, beats, drums…": "drones, batidas, bateria…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "O que a canção não deve ter. A passagem incondicional da orientação leva estes estilos no lugar de um estilo vazio, e a canção é afastada deles. Vazio, essa passagem fica como está."
 });

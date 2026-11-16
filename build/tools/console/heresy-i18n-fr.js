@@ -38,6 +38,16 @@ RuachI18n.add("fr", {
 "Whole, the default: the sound half hears a song through one window of 24,576 rows (the style, the lyrics and the score first, then two rows for every frame of music), so the song is held to what that window holds and is never joined. With the whole context that is about 6 to 7¾ minutes, by the length of the lyrics and the score; fewer Context rows in the Engine's settings (a card with less memory) make it shorter, and Max length is the other cap. Pieces, experimental, for really long songs: the music goes on past the window, and the sound half solves it in two or more windows that hear 6 s past each joint and crossfade over 4 s there; a joint can still be heard, about 1 dB quieter for a few seconds (measured 07.11.2026). The Ladder above solves in pieces of its own. A take already longer than one window goes on in pieces when sung anew from a moment, as it was made.": "Entière, par défaut : la moitié son entend une chanson à travers une fenêtre de 24 576 lignes (d’abord le style, les paroles et la partition, puis deux lignes pour chaque trame de musique), si bien que la chanson s’en tient à ce que cette fenêtre contient et n’est jamais raccordée. Avec le contexte entier, cela fait environ 6 à 7¾ minutes, selon la longueur des paroles et de la partition ; moins de Lignes de contexte dans les réglages du Moteur (une carte avec moins de mémoire) la raccourcissent, et la Durée max. est l’autre limite. Par morceaux, expérimental, pour les chansons vraiment longues : la musique continue au-delà de la fenêtre et la moitié son la résout en deux fenêtres ou plus qui entendent 6 s au-delà de chaque raccord et s’y fondent sur 4 s ; un raccord peut encore s’entendre, environ 1 dB plus bas pendant quelques secondes (mesuré le 07.11.2026). L’Échelle ci-dessus résout déjà en morceaux à elle. Une prise déjà plus longue qu’une fenêtre continue par morceaux quand elle est rechantée depuis un moment, comme elle a été faite.",
 "Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).": "La Durée max. {0} dépasse ici une fenêtre (environ {1}–{2}, selon les paroles et la partition) : la chanson s’arrête là où la fenêtre finit. Plus longue : Chansons longues · Par morceaux (expérimental).",
 "Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)": "Entière jusqu’à {0} : là finit une fenêtre de la moitié son. Plus longue : Chansons longues · Par morceaux (expérimental)",
+// long songs: Pieces is the default past one window (test-nar-seam)
+"Whole · one window": "Entier · une fenêtre",
+"Pieces · joined": "Morceaux · joints",
+"Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).": "La durée maximale {0} dépasse ici une fenêtre (environ {1}–{2}, selon les paroles et la partition).",
+"Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.": "Morceaux est actif : la musique va jusqu'à la durée maximale et le son est joint (6 s de recouvrement, un fondu de 4 s). Entier arrête la musique à la fenêtre.",
+"Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.": "Entier arrête la musique là où la fenêtre finit. Choisis Morceaux pour aller jusqu'à la durée maximale ; le son est alors joint.",
+"The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.": "La chanson s'arrête là où la fenêtre finit. Morceaux n'est pas le choix par défaut : les contrôles de joint n'ont pas réussi. Ne choisis Morceaux que si tu acceptes un joint non vérifié.",
+"Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.": "Morceaux joint le son au-delà de cette fenêtre. Les contrôles de joint n'ont pas réussi : un joint peut être faux. Entier arrête la musique à la fenêtre.",
+"Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.": "Entier jusqu'à {0} : une fenêtre de la moitié sonore s'y termine. Choisis Morceaux pour mener la musique jusqu'à la durée maximale et joindre le son.",
+"Whole keeps the sound in one window: the style, the lyrics and the score, then two rows for every frame. The music stops at the end of that window — about 6 to 7¾ minutes with the full context of 24,576 rows, shorter when the lyrics and the score are long or Engine context is smaller. Pieces lets the music run to Max length (8:00 by default; the language-model context is still the ceiling) and solves the sound in even windows that hear 6 s past each joint and crossfade over 4 s. The windows' weights sum to one, so the seam does not drop out; a joint can still sit about 1 dB quieter for a few seconds (measured 07.11.2026). When Max length is past one window, Pieces is the default. Choose Whole to stop at the window. The Ladder above uses its own piece size. A take already longer than one window goes on in pieces when sung anew from a moment.": "Entier garde le son dans une fenêtre : le style, les paroles et la partition, puis deux lignes par image. La musique s'arrête à la fin de cette fenêtre — environ 6 à 7¾ minutes avec le contexte complet de 24 576 lignes, moins si les paroles et la partition sont longues ou si le contexte du moteur est plus petit. Morceaux laisse la musique aller jusqu'à la durée maximale (8:00 par défaut ; le contexte du modèle de langue reste le plafond) et résout le son en fenêtres égales qui entendent 6 s après chaque joint et se fondent sur 4 s. Les poids des fenêtres font un, le joint ne tombe donc pas ; un joint peut quand même rester environ 1 dB plus bas quelques secondes (mesuré le 07.11.2026). Quand la durée maximale dépasse une fenêtre, Morceaux est le choix par défaut. Entier s'arrête à la fenêtre. L'échelle au-dessus a sa propre taille de morceau. Une prise déjà plus longue qu'une fenêtre continue en morceaux quand on la rechante depuis un instant.",
 "held whole at {0} (one window)": "entière jusqu’à {0} (une fenêtre)",
 // writer lane 12.11.2026 (HERESY 2463–2473): the Writer on the Intel Arc, its window, the draft's guards, Stop, the write target, the key's place
 "{#0} lines differ from now": "{0} lignes diffèrent de maintenant",
@@ -947,6 +957,13 @@ RuachI18n.add("fr", {
 "has": "contient",
 "stems": "stems",
 "debuzz": "antibourdon",
+"Frame buzz": "Bourdonnement de trame",
+"Take the 25 Hz buzz out": "Retirer le bourdonnement à 25 Hz",
+"YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "Le décodeur de YuE2 écrit le son par trames de 1920 échantillons, 25 par seconde, et laisse dans les aigus une ondulation de gain, entendue comme un bourdonnement à 25 Hz et ses multiples. Activé, le défaut : la prise que tu entends et télécharges a perdu cette ondulation (80 %, la mesure retenue), et le fichier du décodeur, crêtes entières, est gardé à côté sous le nom audio.raw.wav. Désactivé : la prise reste telle que le décodeur l’a écrite, crêtes entières. WAV seulement ; un MP3 est déjà encodé et reste tel quel.",
+"Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "Le retrait ne porte que sur un WAV. Un MP3 reste tel que le décodeur l’a écrit.",
+"MP3, left encoded": "MP3, laissé encodé",
+"Frame buzz stays: the take is the decoder's own, peaks whole.": "Le bourdonnement de trame reste : la prise est celle du décodeur, crêtes entières.",
+"on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "activé par défaut pour un WAV : l’ondulation à 25 Hz quitte les aigus, et audio.raw.wav garde le fichier du décodeur. Désactivé, ce fichier reste la prise",
 "remaster": "remastering",
 "upscale": "suréchantillonnage",
 "Select all": "Tout sélectionner",
@@ -5923,7 +5940,7 @@ RuachI18n.add("fr", {
 "{0} cloned: its window holds its own settings": "{0} cloné : sa fenêtre garde ses propres réglages",
 "Delete the clone «{0}»? Its settings go with it.": "Supprimer le clone « {0} » ? Ses réglages partent avec lui.",
 "Eight clones of one step are enough": "Huit clones d'une étape suffisent",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Chaque Generate garde le style, les paroles et la partition de ce titre à part des prises : ses versions, la différence de deux, une de retour dans le formulaire",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Chaque Generate garde le style, les styles exclus, les paroles et la partition de ce titre à part des prises : ses versions, la différence de deux, une de retour dans le formulaire",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Les mots de chaque Generate, gardés sous leur titre à part des prises : une prise supprimée ne les emporte jamais",
 "Musician's versions": "Versions du Musicien",
 "The Musician's version was not kept: {0}": "La version du Musicien n'a pas été gardée : {0}",
@@ -5940,7 +5957,7 @@ RuachI18n.add("fr", {
 "Trash ({0})": "Corbeille ({0})",
 "Bring back": "Ramener",
 "deleted from the library; its words are kept here": "supprimée de la bibliothèque ; ses mots sont gardés ici",
-"Its title, style, lyrics and score into the Musician's form": "Son titre, son style, ses paroles et sa partition dans le formulaire du Musicien",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Son titre, son style, ses styles exclus, ses paroles et sa partition dans le formulaire du Musicien",
 "★ Starred": "★ Étoilée",
 "☆ Star": "☆ Étoile",
 "Label…": "Étiquette…",
@@ -5956,7 +5973,7 @@ RuachI18n.add("fr", {
 "Delete version #{0}?": "Supprimer la version #{0} ?",
 "It goes into this title's trash, from where it comes back.": "Elle va dans la corbeille de ce titre, d'où elle revient.",
 "Put version #{0} into the Musician's form?": "Mettre la version #{0} dans le formulaire du Musicien ?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Le titre, le style, les paroles et la partition qui y sont maintenant sont remplacés. Ce qui en a déjà été généré est gardé ici.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Le titre, le style, les styles exclus, les paroles et la partition qui y sont maintenant sont remplacés. Ce qui en a déjà été généré est gardé ici.",
 "Version #{0} is in the form": "La version #{0} est dans le formulaire",
 "No version is kept yet: every Generate keeps its words here": "Aucune version encore : chaque Generate garde ici ses mots",
 "The Musician's versions": "Versions du Musicien",
@@ -9268,4 +9285,13 @@ RuachI18n.add("fr", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("fr", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "Le VAE avec lequel une chanson est décodée quand sa requête n'en nomme aucun (prompts enregistrés, autres clients). Les boutons VAE du formulaire le choisissent pour chaque chanson, et une chanson terminée peut en recevoir un autre depuis sa page."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("fr", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles n'a pas été utilisé : un guidage de 1.0 garde une seule branche",
+"Exclude styles": "Exclure des styles",
+"drones, beats, drums…": "drones, beats, batterie…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Ce que la chanson ne doit pas avoir. La passe inconditionnelle du guidage porte ces styles au lieu d'un style vide, et la chanson est écartée d'eux. Vide, cette passe reste comme elle est."
 });

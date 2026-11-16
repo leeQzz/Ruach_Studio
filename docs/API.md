@@ -18,7 +18,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | POST | `/api/v1/jobs/ID/cancel` | stop it |
 | GET | `/api/v1/takes` | the takes, newest first: `?workspace=` `?q=` (title or note) `?limit=` `?offset=` |
 | GET | `/api/v1/takes/NAME` | one take: its marks, workspaces, and what it was made with (style, lyrics, score, seeds, adapters) |
-| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves) |
+| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves). `?raw=1` is the decoder's peak-whole WAV when debuzz kept one (`audio.raw.wav`); 404 when the take has none |
 | POST | `/api/v1/takes/NAME/marks` | `{rating: 1 / -1 / 0, favorite: true/false, note: "…"}` |
 | POST | `/api/v1/takes/NAME/reaper` | the take as a REAPER project (see the guide's DAW tab); answers where to fetch the ZIP |
 | GET | `/api/v1/takes/NAME/artwork` | its artwork (a redirect to the JPEG, 768 px), 404 until it has one |
@@ -26,7 +26,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | GET | `/api/v1/takes/NAME/derived` | the Refiner's tree: every branch made from the take, its files (each with a `url`), and what runs |
 | GET | `/api/v1/takes/NAME/file?path=derived/…` | one file of the tree (a redirect to it) |
 | POST | `/api/v1/takes/NAME/stems` | `{mode: four \| vocals, source}`: four by default; `source` a debuzzed or upscaled file of the tree, a set of its own (the same file again answers with the set it gave) |
-| POST | `/api/v1/takes/NAME/debuzz` | `{strength: 0.1–1, source}` |
+| POST | `/api/v1/takes/NAME/debuzz` | `{strength: 0.1–1, source}`: the take itself, when the engine already cleaned it, is not cured again |
 | POST | `/api/v1/takes/NAME/remaster` | `{source, preset, lufs, tp, hz432, deess, cleanup, fade, formats}` (the Refiner's Remaster step) |
 | POST | `/api/v1/takes/NAME/upscale` | `{mode: subtle \| normal \| high \| extreme, variants: 1 \| 2, keep, source}` |
 | POST | `/api/v1/takes/NAME/lyrics-check` | `{source, again}`: Whisper against the lyrics, the result when ready |
@@ -48,13 +48,21 @@ POST /api/v1/songs
 ```
 
 - `mode`: `direct` (fastest), `full` (a score first: melody and chords, then the song), `melody`. With a score of your own (`abc`, or a MIDI file) and no mode, the score's kind picks it: `full` when it has chord symbols, `melody` when not. `direct` with a score is refused (`400`): direct makes the music without one, and the score would be dropped.
+- `exclude_styles`: what the song must not have (`drones, beats, drums`). The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Left out or empty, that pass stays the instruction alone. Lines are joined into one, as in the Creator. Longer than 8000 characters is refused. Guidance of exactly `1.0`, with `cfg_lyrics` left out or equal to that same `1.0`, is a single branch: the exclusion would not move a logit. The song is still made, and the answer says `exclude_unused: true` with `exclude_warning` (`exclude_styles was not used: guidance 1.0 keeps a single branch`). The job status repeats that sentence. Any other guidance, or a lyrics scale of its own, uses the exclusion.
 - `instrumental: true` makes it without a voice (the lyrics are then left out).
 - `music_seed`, `sound_seed`: to make a take again; left out, both are random.
 - `abc`: your own score, in YuE2's two-voice dialect (what the Creator's score drawer holds).
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
-- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
-- `gloss_gate` (default off), `gloss_threshold` (0 to 1, default 0.35), `gloss_attempts` (1 to 8, default 3). With the gate on, the song is made, then Whisper's word error is measured (`lab/gloss_core.py`). Over the threshold, `lm_seed` is drawn again and the song is made again, up to that many attempts. The job's `takes` is the lowest error; `gloss_attempts` records each one (`n`, `lm_seed`, `job`, `take`, `wer`). The gate needs lyrics. Poll `GET /api/v1/jobs/ID` as for any other song: the id starts with `gg-`.
+- `nar_pieces`: the long-song choice, the same one as the console's Long songs.
+  - Left out: the engine decides from the real prefix. When `duration` is past one sound window (about 6 to 7¾ minutes at a full context, less with a long score or a smaller Engine context), the music runs to that duration and the sound is joined. When it fits, the song stays one window. The API's own default duration, 180 seconds, fits, so an old client that omits both fields is unchanged.
+  - `false`: Whole. The music stops at one window, even when `duration` is longer. This is what the console sends when Whole is selected.
+  - `true`: Pieces. The music is not cut at the window. A song that fits is still one chunk.
+  - Anything other than `true` or `false` is `400`.
+  - An old client of `POST /synth`, `/api/v1/songs`, or the MCP tool that omits the field and asks for a length past one window (the engine's own default duration is 8:00) is no longer cut there. To keep that cut, send `false`. A saved `request.json` that does not contain the field is decided again the same way; one that contains `false` stays Whole.
+- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is: `debuzzed` is false and `debuzz_note` is `mp3`, even when the request says `debuzz: true` (the checkbox can stay on; the file is not cleaned, and nothing reports `debuzzed: true`). A WAV32 (float) keeps the level the cure left, including a peak above full scale; 16- and 24-bit come down to 0.999 only when a peak would not fit. With no library (`--outputs` unset) the job's WAV is still cleaned, and the result's extra part named `raw` is the decoder's file (the same role as `audio.raw.wav`). A failed cure leaves the decoder's WAV as the audio and sets `debuzzed` false. Cancelling the job stops the cure: every variation is still saved, one whose cure finished stays `debuzzed` true, and one it did not finish is `debuzzed` false with note `cancel`. The cancelled job names those takes. `POST /takes/NAME/debuzz` on a take that is already cleaned does not run the cure again; pass `source` (for example `audio.raw.wav`) to cure that file. Anything other than `true` or `false` is `400`.
+- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `cfg_lyrics`, `output_format` (WAV 24-bit unless asked otherwise). `nar_pieces` is passed on only when the request says it. `debuzz` defaults to `true` when the request leaves it out. `exclude_styles` and `debuzz` are both kept.
+- `gloss_gate` (default off), `gloss_threshold` (0 to 1, default 0.35), `gloss_attempts` (1 to 8, default 3). With the gate on, the song is made, then Whisper's word error is measured (`lab/gloss_core.py`). Over the threshold, `lm_seed` is drawn again and the song is made again, up to that many attempts. The job's `takes` is the lowest error; `gloss_attempts` records each one (`n`, `lm_seed`, `job`, `take`, `wer`). The gate needs lyrics. Poll `GET /api/v1/jobs/ID` as for any other song: the id starts with `gg-`. A gated retry keeps `exclude_styles`, `debuzz`, and `nar_pieces`.
 - `workspace`: the take lands there when it is done. With the gate on, the take that was kept.
 
 ### A melody as a MIDI file

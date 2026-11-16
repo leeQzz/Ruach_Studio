@@ -105,6 +105,7 @@ on Forge, next to it (Viktor 30.09.2026: «Считай всё на Големе
   GET /loop?name=&start=&seconds=                 HERESY 1325: a loop cut from the take's WAV, seamless (audio/wav)
   GET /stereo/guard?ws=&base=&again=1   HERESY 2340: a workspace's takes against the base model on the same cards, by their stereo (202 while it measures)
   GET /train/datasets · /train/scan?name= · /train/prepare?name= · /train/run?name= · /train/log?name=
+  GET /train/scores?name=&cot=full|melody[&transcriber=]   which tracks of a prepared set have a score for that mode
   GET /train/doctor?name= · POST /train/doctor {name, again}   HERESY 2351: the dataset doctor (dataset_doctor.py), a raw folder against the guide
   POST /train/prepare {from, name, style, tracks} · /train/run {dataset, name, steps…} · /train/stop {name} · /train/pack {name, undo} (HERESY 1626)
        /train/publish {name, file}: one epoch's checkpoint into loras/ (HERESY 1067)
@@ -2282,6 +2283,17 @@ def debuzz_async(name, source="", strength=0.8, period=1920, rate=48000):
     if not (256 <= period <= 16384 and 8000 <= rate <= 192000):
         raise ValueError("period or rate out of range")
     d = take_dir(name)
+    # The engine's default cure already replaced audio.wav and kept audio.raw.wav. Running this on the take
+    # again would cure the cleaned file. A source (the raw file, or one made from the take) is still a first cure of that file.
+    if not source:
+        import debuzz as debuzz_mod
+        try:
+            meta = json.load(open(d / "meta.json", encoding="utf-8"))
+        except (OSError, ValueError):
+            meta = {}
+        if debuzz_mod.already_debuzzed(meta, source):
+            return {"status": "done", "idempotent": True, "debuzzed": True,
+                    "note": "already debuzzed; audio.wav is the cleaned take and audio.raw.wav is the decoder's"}
     audio, tag = source_of(name, source)
     if not audio:
         raise FileNotFoundError(f"{name} has no audio")
@@ -2681,6 +2693,10 @@ def chain_async(name, spec):
                     continue
                 if k == "debuzz":
                     r = debuzz_async(name, src, st["strength"], spec.get("period") or 1920, spec.get("rate") or 48000)
+                    if r.get("idempotent"):
+                        st["status"] = "done"
+                        st["file"] = src or "audio.wav"
+                        continue
                     _follow(r, f"debuzz:{name}:{r['id']}")
                     src = _first_file(d, r["id"])
                 elif k == "upscale":
@@ -4219,8 +4235,9 @@ class Handler(BaseHTTPRequestHandler):
                 except (ValueError, FileNotFoundError) as e:
                     return self.send(404, {"error": str(e)})
             if url.path == "/debuzz":
-                return self.send(202, debuzz_async(q.get("name", ""), q.get("source", ""), q.get("strength", "0.8"),
-                                                   q.get("period", "1920"), q.get("rate", "48000")))
+                r = debuzz_async(q.get("name", ""), q.get("source", ""), q.get("strength", "0.8"),
+                                 q.get("period", "1920"), q.get("rate", "48000"))
+                return self.send(200 if r.get("idempotent") else 202, r)
             if url.path == "/textend":
                 r = textend_async(q.get("name", ""), q.get("force") == "1", q.get("cached") == "1")
                 return self.send(500 if r.get("status") == "failed" else 202 if r.get("status") else 200, r)
@@ -4300,6 +4317,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, training.listen_status(KIT, q.get("name", "")))
             if url.path == "/train/doctor":                 # HERESY 2351: the dataset doctor's report and where it stands
                 return self.send(200, dataset_doctor.status(KIT, q.get("name", "")))
+            if url.path == "/train/scores":                 # full / melody: scores kept on the set, transcribed, missing, refused
+                try:
+                    d = training._safe_dir(training.paths(KIT)["prepared"], q.get("name", ""))
+                    tx = q.get("transcriber") or training.set_transcriber(d) or training.NEW_SET_TRANSCRIBER
+                    return self.send(200, training.score_report(d, q.get("cot") or "full", tx))
+                except (ValueError, OSError) as e:
+                    return self.send(400, {"error": str(e)})
             if url.path == "/train/voice":                  # HERESY 1169: a raw folder's voice, measured
                 return self.send(200, training.voice_status(KIT, q.get("name", "")))
             if url.path == "/topology":                      # HERESY 2085: Engine → Hardware → Topology; fresh: the Engine opened

@@ -64,15 +64,9 @@ SHEET_FLAGS = {"full": [], "melody": ["--melody-only"]}
 # in its own file, so a set's SheetSage2 sheets are never mixed with Refined's (whose chords and keys are wider)
 # HERESY 2359: and SheetSage2 with the bfloat16 rotary angles it learnt with ("sheetsage2-bf16", files .bf16.abc); plain "sheetsage2" is
 # SheetSage2 with the exact angles every set's sheets were written with so far (no suffix, byte-identical to them)
-TRANSCRIBERS = ("sheetsage2", "sheetsage2-bf16", "refined")
-SUFFIX = {"sheetsage2": "", "sheetsage2-bf16": ".bf16", "refined": ".refined"}
+from prompt import SHEET_SUFFIX as SUFFIX  # the same names prompt.sheet_filename writes and the dataset check counts
+TRANSCRIBERS = tuple(SUFFIX)
 REFINED_GGUF = "SheetSage2-Refined-F16.gguf"
-
-
-def _sheet_suffix(transcriber):
-    if transcriber not in TRANSCRIBERS:
-        raise ValueError(f"transcriber {transcriber!r}: sheetsage2-bf16 (Heretical), refined (Refined) or sheetsage2 (Standard, the sheets before 2.0.7)")   # HERESY 2377
-    return SUFFIX[transcriber]
 
 
 def _angles_env(transcriber):
@@ -81,7 +75,8 @@ def _angles_env(transcriber):
 
 
 def sheet_path(set_folder, stem, cot, transcriber="sheetsage2"):
-    return os.path.join(set_folder, "_ruach_cache", f"{stem}_ruach.{cot}{_sheet_suffix(transcriber)}.abc")
+    from prompt import sheet_filename
+    return os.path.join(set_folder, "_ruach_cache", sheet_filename(stem, cot, transcriber))
 
 
 def missing_sheets(set_folder, cot, transcriber="sheetsage2"):
@@ -135,7 +130,8 @@ def stems_path(set_folder, stem):
 
 
 def stem_sheet_path(set_folder, stem, variant, cot, transcriber="sheetsage2"):
-    return os.path.join(set_folder, "_ruach_cache", f"{stem}_ruach.{variant}.{cot}{_sheet_suffix(transcriber)}.abc")
+    from prompt import stem_sheet_filename
+    return os.path.join(set_folder, "_ruach_cache", stem_sheet_filename(stem, variant, cot, transcriber))
 
 
 def missing_stems(set_folder, cot="off", transcriber="sheetsage2"):
@@ -150,6 +146,12 @@ def missing_stems(set_folder, cot="off", transcriber="sheetsage2"):
     return out
 
 
+def _stem_sheet_open(set_folder, stem, cot, transcriber):
+    """A voice or band sheet still to be written: neither the abc nor the refusal beside it."""
+    return any(not os.path.isfile(p) and not os.path.isfile(p + ".fail")
+               for p in (stem_sheet_path(set_folder, stem, v, cot, transcriber) for v in STEMS))
+
+
 def stems(set_folder, kit, cot="off", device="cuda", only=None, transcriber="sheetsage2"):
     """Split, tokenize (and with a cot transcribe) every track that lacks it; the separator and the MERT head freed after."""
     from audio_separator.separator import Separator
@@ -158,7 +160,9 @@ def stems(set_folder, kit, cot="off", device="cuda", only=None, transcriber="she
     todo = only or missing_stems(set_folder, cot, transcriber)
     if not todo:
         return 0
-    exe, gguf = _transcriber(kit, transcriber) if cot != "off" else (None, None)
+    # a sheet already written, or already refused, is not made again; the transcriber is asked for only while one is still open
+    score = cot != "off" and any(_stem_sheet_open(set_folder, stem, cot, transcriber) for stem in todo)
+    exe, gguf = _transcriber(kit, transcriber) if score else (None, None)
     cache_dir = os.path.join(set_folder, "_ruach_cache")
     work = os.path.join(cache_dir, ".stems-work")
     os.makedirs(work, exist_ok=True)
@@ -188,8 +192,9 @@ def stems(set_folder, kit, cot="off", device="cuda", only=None, transcriber="she
             if t.shape[0] < n:                                    # a stem a frame short of the mix: its last token again
                 t = torch.cat([t, t[-1:].repeat(n - t.shape[0])])
             out[f"tokens_{name}"] = t[:n].to(torch.int32).cpu()
-            if cot != "off":
-                ok, what = _transcribe(exe, gguf, path, stem_sheet_path(set_folder, stem, name, cot, transcriber), cot, transcriber)
+            target = stem_sheet_path(set_folder, stem, name, cot, transcriber) if cot != "off" else None
+            if target is not None and not os.path.isfile(target) and not os.path.isfile(target + ".fail"):
+                ok, what = _transcribe(exe, gguf, path, target, cot, transcriber)
                 said.append(f"{name} sheet {what} characters" if ok else f"{name}: no sheet ({what})")
         target = stems_path(set_folder, stem)
         save_file(out, target + ".part", metadata={"filename": stem + ".wav", "separator": ROFORMER, "latent_space_version": VERSION,

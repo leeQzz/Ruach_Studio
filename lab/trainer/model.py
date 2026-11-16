@@ -27,20 +27,14 @@ from torch import nn
 import torch.utils.checkpoint as ckpt
 
 
-# vocabulary layout of the AR expert
-EOD = 151643
-ABC_START, ABC_END = 151847, 151848
-MUSIC_START, MUSIC_END = 151851, 151852
+# vocabulary layout of the AR expert. The prompt ids and the three instructions live in prompt.py,
+# the same numbers and strings as build/src/prompt.h, so a layout test does not load this module.
+from prompt import ABC_END, ABC_START, EOD, INSTRUCTIONS, MUSIC_END, MUSIC_START  # noqa: E402
+
 CODEC_OFFSET, CODEC_SIZE = 151853, 32768
 CONTEXT = 24576
 FRAMES_PER_SECOND = 25
 LATENT_DIM = 64
-
-INSTRUCTIONS = {
-    "off": "Generate music with codec tokens from the given conditions.",
-    "melody": "Generate a melody-only ABC transcription without chord symbols, then generate music with codec tokens from the given conditions.",
-    "full": "Generate a chord-annotated ABC transcription, then generate music with codec tokens from the given conditions.",
-}
 
 
 class YuE2Config:

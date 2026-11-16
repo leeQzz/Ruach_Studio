@@ -161,6 +161,38 @@ check("the page keeps that default when the decoder is still offered",
       "props.default_vae" in page and "/^rs-/" in page)
 setup = page.split("var SETUP_KEYS", 1)[1].split("];", 1)[0]
 check("a saved output profile keeps the frame-buzz switch", '"debuzz"' in setup)
+check("the card does not call an MP3 debuzzed", "MP3, left encoded" in page and "function debuzzSaid" in page)
+check("a cancel keeps later variations and marks the one it stopped",
+      "mark_debuzz_cancel" in server and "debuzz_stopped" in server and "note cancel" in server)
+check("a cancelled job names the takes it kept, and a loose result can still be fetched",
+      "JobStatus::CANCELLED && !job.takes.empty()" in server and "CANCELLED && !job->result_body.empty()" in server)
+check("no library keeps the decoder WAV in a raw part", 'name=\\"raw\\"' in server)
+
+check("already cleaned is not a second cure", debuzz.already_debuzzed({"debuzzed": True}, "") is True)
+check("a source is a different file", debuzz.already_debuzzed({"debuzzed": True}, "audio.raw.wav") is False)
+check("a take the cure did not finish is not skipped", debuzz.already_debuzzed({"debuzzed": False, "debuzz_note": "cancel"}, "") is False)
+check("an MP3 note is not a cleaned take", debuzz.already_debuzzed({"debuzzed": False, "debuzz_note": "mp3"}, "") is False)
+
+songs = api.openapi()["paths"]["/songs"]["post"]["requestBody"]["content"]["application/json"]
+# description lives on the operation, beside the schema
+song_text = json.dumps(api.openapi()["paths"]["/songs"]["post"])
+check("OpenAPI says an MP3 is not cleaned and debuzzed stays false", "debuzzed stays false" in song_text and "MP3" in song_text, song_text[song_text.find("debuzz"):song_text.find("debuzz")+400])
+debuzz_post = json.dumps(api.openapi()["paths"]["/takes/{name}/debuzz"]["post"])
+check("OpenAPI says a cleaned take is not cured again", "not cured again" in debuzz_post, debuzz_post[:400])
+
+with tempfile.TemporaryDirectory() as idem_root:
+    take = Path(idem_root) / "take-1"
+    take.mkdir()
+    (take / "meta.json").write_text(json.dumps({"debuzzed": True, "raw": "audio.raw.wav"}), encoding="utf-8")
+    (take / "audio.raw.wav").write_bytes(b"RIFF")
+    called = []
+    ctx_idem = {"collection": None, "outputs": Path(idem_root), "config_dir": lambda: Path(idem_root),
+                "refine": {"debuzz": lambda *a, **k: called.append(a) or {"status": "queued", "id": "no"}}}
+    code, body = api.handle("POST", "/api/v1/takes/take-1/debuzz", {}, b"{}", {}, ctx_idem)
+    check("POST debuzz on a cleaned take does not run again", code == 200 and body.get("idempotent") is True and body.get("debuzzed") is True and not called,
+          (code, body, called))
+    code, body = api.handle("POST", "/api/v1/takes/take-1/debuzz", {}, json.dumps({"source": "audio.raw.wav"}).encode(), {}, ctx_idem)
+    check("POST debuzz of audio.raw.wav still starts", code == 202 and len(called) == 1, (code, body, called))
 
 print("test_debuzz:", "FAILED " + ", ".join(bad) if bad else "all passed")
 sys.exit(1 if bad else 0)

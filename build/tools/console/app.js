@@ -3290,7 +3290,7 @@
     }
     if (status === "done") return finishJob(job, data);
     if (status === "failed") return failJob(job, data.error || job.lastFatal || "The run failed; the server log (Engine) has the reason.", data);
-    if (status === "cancelled") return cancelledJob(job);
+    if (status === "cancelled") return cancelledJob(job, data);
   }
 
   function settle(job, status) {
@@ -3403,10 +3403,34 @@
   window.ruachLogLine = onLogLine; window.ruachJobById = jobById;   // HERESY 1765: for the checks (a run from elsewhere, line by line)
   window.ruachRegisterJob = registerJob;             // HERESY 1766: for the checks (a slow POST claiming its run)
 
-  function cancelledJob(job) {
+  function cancelledJob(job, data) {
     if (!isLive(job)) return;
     planTake(job);                                        // HERESY 2133: a cancelled plan is sung by no one
     job.error = "";
+    var names = (data && data.takes) || [];
+    var made = data && typeof data.made === "number" ? data.made : 0;
+    // A cure that was stopped still keeps every variation: in the library, or (no library) in this tab.
+    // Each saved take's own debuzzed flag says whether that one finished.
+    if (names.length) {
+      job.takes = names;
+      settle(job, "cancelled");
+      toastOnce(job.id, "Cancelled: " + job.title);
+      refreshLibrary();
+      return;
+    }
+    if (made > 0 && !STATE.library && job.kind !== "transcribe" && !(job.request && job.request.plan)) {
+      sessionTakes(job).then(function (takes) {
+        if (!isLive(job)) return;
+        job.takes = takes;
+        settle(job, "cancelled");
+        toastOnce(job.id, "Cancelled: " + job.title);
+      }, function () {
+        if (!isLive(job)) return;
+        settle(job, "cancelled");
+        toastOnce(job.id, "Cancelled: " + job.title);
+      });
+      return;
+    }
     settle(job, "cancelled");
     toastOnce(job.id, "Cancelled: " + job.title);
     if (job.kind === "transcribe") transcriptionFailed(job, "Transcription cancelled.");
@@ -3610,7 +3634,12 @@
         var pending = null;
         splitMultipart(new Uint8Array(res.buffer), match[1].replace(/"/g, "")).forEach(function (part) {
           if (/json/.test(part.type)) pending = parseJSON(new TextDecoder().decode(part.body));
-          else if (pending) { pairs.push({ request: pending, audio: new Blob([part.body], { type: part.type }) }); pending = null; }
+          else if (/name="raw"/i.test(part.disposition || "") && pairs.length) {
+            pairs[pairs.length - 1].raw = new Blob([part.body], { type: part.type || "audio/wav" });
+          } else if (pending && !/octet-stream/.test(part.type)) {
+            pairs.push({ request: pending, audio: new Blob([part.body], { type: part.type }) });
+            pending = null;
+          }
         });
       } else {
         pairs.push({ request: {}, audio: new Blob([res.buffer], { type: res.type || "audio/mpeg" }) });
@@ -3626,6 +3655,8 @@
           vae: req.vae || job.request.vae, sliders: req.sliders || [], steps: req.steps || job.request.steps,
           cfg_scale: typeof req.cfg_scale === "number" ? req.cfg_scale : -1, cfg_lyrics: typeof req.cfg_lyrics === "number" ? req.cfg_lyrics : -1, duration: req.duration,
           truncated: false, render_seconds: job.finished ? (job.finished - job.started) / 1000 : 0,
+          debuzzed: !!pair.raw, debuzz_note: pair.raw ? "" : (req.output_format === "mp3" && req.debuzz !== false ? "mp3" : ""),
+          rawUrl: pair.raw ? URL.createObjectURL(pair.raw) : "",
           song: Math.floor(n / variations), variation: n % variations, parent: req.parent || "", has_score: !!req.abc
         };
         STATE.session.unshift(take);
@@ -3647,9 +3678,12 @@
         if (bytes[k] === 13 && bytes[k + 1] === 10 && bytes[k + 2] === 13 && bytes[k + 3] === 10) { split = k; break; }
       }
       if (split < 0) continue;
-      var head = new TextDecoder().decode(bytes.slice(start, split)), type = "application/octet-stream";
-      head.split(/\r\n/).forEach(function (line) { var m = line.match(/^Content-Type:\s*(.+)$/i); if (m) type = m[1].trim(); });
-      parts.push({ type: type, body: bytes.slice(split + 4, end) });
+      var head = new TextDecoder().decode(bytes.slice(start, split)), type = "application/octet-stream", disposition = "";
+      head.split(/\r\n/).forEach(function (line) {
+        var m = line.match(/^Content-Type:\s*(.+)$/i); if (m) type = m[1].trim();
+        var d = line.match(/^Content-Disposition:\s*(.+)$/i); if (d) disposition = d[1].trim();
+      });
+      parts.push({ type: type, disposition: disposition, body: bytes.slice(split + 4, end) });
     }
     return parts;
   }
@@ -6171,6 +6205,15 @@
     var codes = rq.semantic_tokens ? String(rq.semantic_tokens).split(",").length : null;
     var made = music ? music.tokens + (music.kept ? " + " + music.kept + " " + tr("kept") : "") : codes;
     var frames = music ? music.tokens + music.kept : codes;
+    // The request's debuzz flag is the ask. The take's own debuzzed is what happened: an MP3 is never cleaned,
+    // so the card does not say "on" for one.
+    function debuzzSaid() {
+      if (take && take.debuzzed === true) return tr("on");
+      if ((take && take.debuzz_note === "mp3") || (rq && rq.output_format === "mp3" && rq.debuzz !== false)) return tr("MP3, left encoded");
+      if ((take && take.debuzzed === false) || (rq && rq.debuzz === false)) return tr("off");
+      if (rq && rq.debuzz === true) return tr("on");
+      return "\u2014";
+    }
     var g = music ? music.guidance : (typeof rq.cfg_scale === "number" && rq.cfg_scale >= 0 ? rq.cfg_scale : null);
     var gl = music ? music.lyrics_guidance : (typeof rq.cfg_lyrics === "number" && rq.cfg_lyrics >= 0 ? rq.cfg_lyrics : null);
     var plan = take.cot === "off" ? cell("Tokens", "Score tokens", tr("no score"), "") :
@@ -6183,7 +6226,7 @@
       smp(rq.semantic_sampling, "Music") + cell("Length cap", "Length cap", rq.duration ? rq.duration + " s" : "\u2014");
     var run = cell("Solver", "Solver", n(rq.solver), "") + cell("Steps", "Run steps", n(rq.steps || take.steps)) + cell("Sound stage", "Sound stage", sound ? secs(sound.seconds) : "\u2014") +
       cell("Decoder", "Decoder", sound ? secs(sound.vae_seconds) : "\u2014") + cell("Whole run", "Whole run", secs(take.render_seconds)) +
-      cell("Debuzz", "Debuzz", rq.debuzz === false ? tr("off") : rq.debuzz === true ? tr("on") : "\u2014", "") +
+      cell("Debuzz", "Debuzz", debuzzSaid(), "") +
       cell("Realtime", "Realtime", take.render_seconds && take.seconds ? "\u00d7" + (take.seconds / take.render_seconds).toFixed(2) : "\u2014") +
       cell("Versions \u00d7 variations", "Versions x variations", (rq.lm_batch_size || 1) + " \u00d7 " + (rq.synth_batch_size || 1)) +
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
@@ -7199,6 +7242,7 @@
     delete STATE.requests[take.name];
     delete STATE.peakCache[takeAudioUrl(take)];
     if (take.session && take.url) URL.revokeObjectURL(take.url);
+    if (take.session && take.rawUrl) URL.revokeObjectURL(take.rawUrl);
     if (STATE.playerTake && STATE.playerTake.name === take.name) clearPlayer();
     if (STATE.take && STATE.take.name === take.name) clearTakeView();
   }

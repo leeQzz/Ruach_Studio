@@ -150,6 +150,16 @@ def _frame_gain(profiles, quiet, i, win, strength, limit):
     return np.clip(prof ** -strength, 10 ** (-limit / 20.0), 10 ** (limit / 20.0))
 
 
+def already_debuzzed(meta, source=""):
+    """The take's own file was already cleaned by the engine. A manual cure of that file would run the cure twice.
+
+    A source (audio.raw.wav, or a file made from the take) is a different file and is not skipped.
+    """
+    if source:
+        return False
+    return isinstance(meta, dict) and meta.get("debuzzed") is True
+
+
 def debuzz_file(src, dst, strength=0.8, cross=2000.0, win=50, limit=3.0, period=1920, rate=48000, subtype="PCM_24"):
     """The frame-locked gain out of the highs. Writes dst. Returns the measure (before, after, found, gain)."""
     strength = float(strength)

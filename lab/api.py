@@ -158,7 +158,10 @@ def openapi():
                 "/songs": {"post": op("Make a song; returns the job. A score (abc, or a MIDI file as midi_b64) makes mode melody "
                                       "or full by itself; direct with a score is refused, as it would drop it. "
                                       "debuzz (default true) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the "
-                                      "decoder's peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it", song)},
+                                      "decoder's peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it. "
+                                      "An MP3 is not cleaned: debuzzed stays false (note mp3), even when debuzz is true. "
+                                      "With no library the job's result carries the cleaned WAV and a part named raw with the decoder's file; "
+                                      "a failed or cancelled cure leaves the decoder's WAV as the audio and does not claim it was cleaned", song)},
                 "/score/from-midi": {"post": op("A MIDI file as a song's score, without making the song: the score and what "
                                                 "it was made of (the key and where it came from, the notes kept and dropped)",
                                                 {"midi_b64": s, "key": s, "ins": {"type": "string", "enum": ["auto", "keep", "none"]}})},
@@ -174,7 +177,9 @@ def openapi():
                 "/takes/{name}/reaper": {"post": op("The take as a REAPER project", {"midi_b64": s}, [("name", "path", "string")])},
                 "/takes/{name}/derived": {"get": op("The Refiner's tree of the take: branches, their files, what runs", params=[("name", "path", "string")])},
                 "/takes/{name}/stems": {"post": op("Split into stems", {"mode": {"type": "string", "enum": ["vocals", "four"]}}, [("name", "path", "string")])},
-                "/takes/{name}/debuzz": {"post": op("The VAE's frame buzz out", {"strength": {"type": "number"}, "source": s}, [("name", "path", "string")])},
+                "/takes/{name}/debuzz": {"post": op("The VAE's frame buzz out of a file that is not already the cleaned take. "
+                                                     "A take the engine already debuzzed (debuzzed true, no source) is not cured again",
+                                                     {"strength": {"type": "number"}, "source": s}, [("name", "path", "string")])},
                 "/takes/{name}/remaster": {"post": op("The Debunker v6 remaster", {"source": s, "preset": s, "lufs": {"type": "number"}, "hz432": b}, [("name", "path", "string")])},
                 "/takes/{name}/upscale": {"post": op("UniverSR upscale", {"mode": {"type": "string", "enum": ["subtle", "normal", "high", "extreme"]}, "variants": i, "keep": b, "source": s}, [("name", "path", "string")])},
                 "/takes/{name}/lyrics-check": {"post": op("Whisper against the lyrics", {"source": s, "again": b}, [("name", "path", "string")])},
@@ -266,6 +271,7 @@ def handle(method, path, query, body, headers, ctx):
             if data.get(k) is not None:
                 req[k] = data[k]
         # debuzz defaults on: a WAV take is cleaned, and audio.raw.wav keeps the decoder's peak-whole file. false leaves it raw.
+        # An MP3 is never cleaned. debuzz true on an MP3 is the ask, not a claim that the file was cleaned.
         if "debuzz" in data and not isinstance(data["debuzz"], bool):
             return 400, {"error": "debuzz is true or false"}
         req["debuzz"] = data["debuzz"] if "debuzz" in data else True
@@ -357,6 +363,15 @@ def handle(method, path, query, body, headers, ctx):
             if what == "stems":
                 r = rf["stems"](name, str(data.get("mode") or "four"), str(data.get("source") or ""))
             elif what == "debuzz":
+                meta = {}
+                try:
+                    meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    meta = {}
+                import debuzz as debuzz_mod
+                if debuzz_mod.already_debuzzed(meta, str(data.get("source") or "")):
+                    return 200, {"status": "done", "idempotent": True, "debuzzed": True,
+                                 "note": "already debuzzed; audio.wav is the cleaned take and audio.raw.wav is the decoder's"}
                 r = rf["debuzz"](name, str(data.get("source") or ""), data.get("strength", 0.8))
             elif what == "remaster":
                 r = rf["remaster"](name, json.dumps(data))

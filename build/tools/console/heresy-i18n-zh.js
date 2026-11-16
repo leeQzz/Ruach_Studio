@@ -951,6 +951,7 @@ RuachI18n.add("zh", {
 "Take the 25 Hz buzz out": "去掉 25 Hz 的嗡声",
 "YuE2's decoder writes sound in frames of 1920 samples, 25 a second, and leaves a gain ripple in the highs, heard as a buzz at 25 Hz and its multiples. On, the default: the take you hear and download has that ripple taken out (80 %, the measured cure), and the decoder's own peak-whole file is kept beside it as audio.raw.wav. Off: the take stays as the decoder wrote it, peaks whole. A WAV only; an MP3 is already encoded and is left as it is.": "YuE2 的解码器按每帧 1920 个采样写声音，一秒 25 帧，并在高频留下增益起伏，听起来是 25 Hz 及其倍数的嗡声。打开（默认）：你听到和下载的成片已去掉这层起伏（80%，测过的程度），解码器自己的整段峰值文件留在旁边，名为 audio.raw.wav。关闭：成片保持解码器写出的样子，峰值完整。只对 WAV；MP3 已经编码，保持原样。",
 "Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.": "去嗡声只处理 WAV。MP3 保持解码器写出的原样。",
+"MP3, left encoded": "MP3，未去嗡",
 "Frame buzz stays: the take is the decoder's own, peaks whole.": "帧嗡声留下：成片就是解码器自己的，峰值完整。",
 "on by default for a WAV: the 25 Hz ripple leaves the highs, and audio.raw.wav keeps the decoder's own file. Off keeps that file as the take": "对 WAV 默认打开：高频里的 25 Hz 起伏被去掉，audio.raw.wav 留着解码器自己的文件。关闭则成片就是那个文件",
 "remaster": "重新母带",

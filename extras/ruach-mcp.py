@@ -42,7 +42,9 @@ def call(path, body=None, timeout=60):
 @mcp.tool()
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
-                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True) -> dict:
+                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "",
+                  gloss_gate: bool = False, gloss_threshold: float = 0.35, gloss_attempts: int = 3,
+                  wait: bool = True) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
     lyrics: with section tags on their own lines ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
@@ -51,7 +53,9 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     second played, one line a voice); the answer's "score" says how the studio read it (key, tempo, notes kept and
     dropped). midi_key: the key to write it in (Em, Bb…) when the file has none and the studio's guess would not do.
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
-    job_status."""
+    job_status. gloss_gate (off unless true): after the song, if the word error is over gloss_threshold (0 to 1),
+    draw another music seed and make it again, up to gloss_attempts (1 to 8). The answer's gloss_attempts lists
+    each try; the take kept is the lowest error."""
     body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental}
     if mode:
         body["mode"] = mode
@@ -68,6 +72,10 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
         body["music_seed"] = music_seed
     if sound_seed is not None:
         body["sound_seed"] = sound_seed
+    if gloss_gate:
+        body["gloss_gate"] = True
+        body["gloss_threshold"] = gloss_threshold
+        body["gloss_attempts"] = gloss_attempts
     job = call("/songs", body)
     if not wait or "job" not in job:
         return job

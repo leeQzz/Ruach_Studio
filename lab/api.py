@@ -4,7 +4,8 @@ addresses only, HERESY 1114). One door for a script, a DAW, an agent: the engine
     GET  /api/v1                          what this is, and every route
     GET  /api/v1/openapi.json             the same as OpenAPI 3.1
     GET  /api/v1/health                   the engine, the lab, the cards (the guard's verdict)
-    POST /api/v1/songs                    make a song: {style, lyrics, title, mode, duration, min_seconds, abc | midi_b64, …} -> {job}
+    POST /api/v1/songs                    make a song: {style, lyrics, title, mode, duration, min_seconds, abc | midi_b64,
+                                          gloss_gate, gloss_threshold, gloss_attempts, …} -> {job}
     POST /api/v1/score/from-midi          a MIDI file as a song's score, to see first: {midi_b64, key, ins} -> {abc, key, …}
     GET  /api/v1/jobs/ID                  its state; when done, the takes it made
     POST /api/v1/jobs/ID/cancel
@@ -29,6 +30,7 @@ A token is asked only when RUACH_API_TOKEN is set, and only of callers not on th
 import base64, json, math, os, re, threading, time, urllib.error, urllib.parse, urllib.request
 from pathlib import Path
 
+import gloss_gate                                      # lyrics gate: after /synth, reseed while WER is over the line
 import midi_score                                       # HERESY 1145
 
 VERSION = "1"
@@ -68,6 +70,30 @@ def _row(r):
 
 
 _PENDING_LOCK = threading.Lock()
+_gloss_score = None                                 # the lab sets this to Whisper + gloss_core; tests set a mock
+
+
+def gloss_score(fn):
+    global _gloss_score
+    _gloss_score = fn
+
+
+def _gate_score(take, lyrics):
+    if _gloss_score is None:
+        raise RuntimeError("the lyrics gate has no scorer on this lab")
+    return _gloss_score(take, lyrics)
+
+
+def _file_kept(state, workspace, ctx):
+    takes = [t for t in (state.get("takes") or []) if t]
+    if not takes or state.get("status") != "done":
+        return
+    try:
+        ctx["collection"].collection_post(ctx["config_dir"](), ctx["outputs"],
+                                         {"op": "ws-add", "workspace": workspace, "names": takes})
+    except ValueError as e:
+        print(f"api · lyrics gate · the kept take is in the library, not in “{workspace}”: {e}", flush=True)
+        state["filing_error"] = str(e)
 
 
 def _pending(ctx, add=None, done=None):
@@ -147,7 +173,8 @@ def openapi():
     s, i, b, a = {"type": "string"}, {"type": "integer"}, {"type": "boolean"}, {"type": "array"}
     song = {"style": s, "lyrics": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
             "instrumental": b, "duration": {"type": "number"}, "min_seconds": {"type": "number"}, "music_seed": i, "sound_seed": i, "abc": s, "loras": a,
-            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]}}
+            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]},
+            "gloss_gate": b, "gloss_threshold": {"type": "number"}, "gloss_attempts": i}
     return {"openapi": "3.1.0",
             "info": {"title": "Ruach Studio API", "version": VERSION,
                      "description": "Songs from words on this machine. Private networks only; a token when RUACH_API_TOKEN is set."},
@@ -268,6 +295,21 @@ def handle(method, path, query, body, headers, ctx):
                 col.fresh_parts(col.load(ctx["config_dir"]()), ws)
             except ValueError as e:
                 return 400, {"error": f"workspace: {e}"}
+        try:
+            gate = gloss_gate.settings(data)
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        if gate["gloss_gate"]:
+            if data.get("instrumental") or not str(req.get("lyrics") or "").strip():
+                return 400, {"error": "the lyrics gate needs lyrics"}
+            ws = str(data.get("workspace") or "")
+            started = gloss_gate.start(req, _gate_score, gate["gloss_threshold"], gate["gloss_attempts"], engine=_engine,
+                                       on_done=(lambda st, w=ws: _file_kept(st, w, ctx)) if ws else None)
+            out = {"job": started["id"], "poll": f"/api/v1/jobs/{started['id']}", "mode": asked or "direct",
+                   "duration": float(duration), "gloss_gate": True}
+            if score:
+                out["score"] = score
+            return 202, out
         job = _engine("/synth", req)
         jid = job.get("id")
         if data.get("workspace") and jid is not None:
@@ -280,9 +322,18 @@ def handle(method, path, query, body, headers, ctx):
     m2 = re.match(r"^/jobs/([^/]+)(/cancel)?$", rest)
     if m2:
         jid = urllib.parse.quote(m2.group(1))
+        raw_id = urllib.parse.unquote(m2.group(1))
         if m2.group(2) and method == "POST":
+            if gloss_gate.job(raw_id):
+                gloss_gate.cancel(raw_id)
+                return 200, gloss_gate.job(raw_id) or {"status": "cancelled"}
             return 200, _engine(f"/job?id={jid}&cancel=1", {})
         if method == "GET":
+            gated = gloss_gate.job(raw_id)
+            if gated:
+                if gated.get("takes"):
+                    gated["urls"] = [f"/api/v1/takes/{t}" for t in gated["takes"]]
+                return 200, gated
             st = _engine(f"/job?id={jid}")
             if st.get("takes"):
                 st["urls"] = [f"/api/v1/takes/{t}" for t in st["takes"]]

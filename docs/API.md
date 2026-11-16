@@ -12,7 +12,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 |---|---|---|
 | GET | `/api/v1` | what this is, and every route |
 | GET | `/api/v1/health` | the engine (busy, memory loaded, cards), the lab, and the GPU guard's verdict on each card |
-| POST | `/api/v1/songs` | make a song; answers `{job, poll}` at once |
+| POST | `/api/v1/songs` | make a song; answers `{job, poll}` at once. `gloss_gate` (off unless true) scores the take and reseeds while the word error is over `gloss_threshold` (0.35), up to `gloss_attempts` (3, at most 8). The job then lists every attempt and keeps the lowest error |
 | POST | `/api/v1/score/from-midi` | a MIDI file as a song's score, without making the song: `{midi_b64, key, ins}` → the score and how it was read |
 | GET | `/api/v1/jobs/ID` | queued, running, done, failed or cancelled; when done, its `takes` |
 | POST | `/api/v1/jobs/ID/cancel` | stop it |
@@ -54,7 +54,8 @@ POST /api/v1/songs
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
 - Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
-- `workspace`: the take lands there when it is done.
+- `gloss_gate` (default off), `gloss_threshold` (0 to 1, default 0.35), `gloss_attempts` (1 to 8, default 3). With the gate on, the song is made, then Whisper's word error is measured (`lab/gloss_core.py`). Over the threshold, `lm_seed` is drawn again and the song is made again, up to that many attempts. The job's `takes` is the lowest error; `gloss_attempts` records each one (`n`, `lm_seed`, `job`, `take`, `wer`). The gate needs lyrics. Poll `GET /api/v1/jobs/ID` as for any other song: the id starts with `gg-`.
+- `workspace`: the take lands there when it is done. With the gate on, the take that was kept.
 
 ### A melody as a MIDI file
 

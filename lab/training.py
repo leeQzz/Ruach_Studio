@@ -123,9 +123,12 @@ def datasets(kit):
         man = d / "dataset.json"
         if man.is_file():
             m = json.load(open(man, encoding="utf-8"))
-            prepared.append({"name": d.name, "tracks": len(m.get("tracks", [])), "from": m.get("from"), "made": m.get("made"),
-                             "seconds": round(sum(t.get("seconds") or 0 for t in m.get("tracks", []))),
-                             "sheets_by": set_transcriber(d)})   # HERESY 2359: the transcriber whose sheets the set holds, "" for none yet
+            tracks = m.get("tracks") or []
+            own_tx = set_transcriber(d)                       # HERESY 2359: "" until the set has sheets
+            prepared.append({"name": d.name, "tracks": len(tracks), "from": m.get("from"), "made": m.get("made"),
+                             "seconds": round(sum(t.get("seconds") or 0 for t in tracks)),
+                             "sheets_by": own_tx,
+                             "scores": scores_by_transcriber(d, tracks)})   # each transcriber: the page follows the one chosen now
     # HERESY 1086: what the Studio's own trainer needs, each said by name (heresy/fetch-heresy.sh --trainer fetches it)
     own = {q: (P["models"] / "checkpoints" / f).is_file() for q, f in OWN_CKPT.items()}
     own.update(mert=(studio_paths.at(studio_paths.MISC, kit) / "MERT-v2-FullSong" / "model.safetensors").is_file(),
@@ -140,6 +143,86 @@ def datasets(kit):
 TRANSCRIBERS = ("sheetsage2", "sheetsage2-bf16", "refined")
 NEW_SET_TRANSCRIBER = "sheetsage2-bf16"
 _SHEETS_BY = {}
+_PROMPT = None
+
+
+def _trainer_prompt():
+    """lab/trainer/prompt.py, loaded by its path (its folder is not on the lab's path: model.py would shadow nothing here, but it imports torch)."""
+    global _PROMPT
+    if _PROMPT is None:
+        import importlib.util
+        path = Path(__file__).resolve().parent / "trainer" / "prompt.py"
+        spec = importlib.util.spec_from_file_location("ruach_trainer_prompt", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _PROMPT = mod
+    return _PROMPT
+
+
+def _cache_names(set_dir):
+    cache = Path(set_dir) / "_ruach_cache"
+    try:
+        return {p.name for p in cache.iterdir() if p.is_file()}
+    except OSError:
+        return set()
+
+
+def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None, names=None):
+    """Which tracks of a prepared set can teach full or melody: a score kept on the track, a transcribed sheet, a refusal, or nothing yet."""
+    P = _trainer_prompt()
+    if cot not in ("full", "melody"):
+        raise ValueError("mode: full or melody")
+    if transcriber not in TRANSCRIBERS:
+        raise ValueError("transcriber: sheetsage2-bf16 (Heretical), refined (Refined) or sheetsage2 (Standard, the sheets before 2.0.7)")
+    set_dir = Path(set_dir)
+    if tracks is None:
+        tracks = json.loads((set_dir / "dataset.json").read_text(encoding="utf-8")).get("tracks") or []
+    if names is None:
+        names = _cache_names(set_dir)
+    sheets, fails = set(), set()
+    for t in tracks:
+        stem = str(t.get("stem"))
+        fn = P.sheet_filename(stem, cot, transcriber)
+        if fn in names:
+            sheets.add(stem)
+        elif fn + ".fail" in names:
+            fails.add(stem)
+    return P.score_coverage(tracks, cot, sheets, fails)
+
+
+def stem_score_gaps(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None, names=None):
+    """Tracks whose voice or band sheet is still to be written. A score on the mix does not cover either stem."""
+    P = _trainer_prompt()
+    if cot not in ("full", "melody"):
+        return []
+    set_dir = Path(set_dir)
+    if tracks is None:
+        tracks = json.loads((set_dir / "dataset.json").read_text(encoding="utf-8")).get("tracks") or []
+    if names is None:
+        names = _cache_names(set_dir)
+    return P.stem_scores_missing(tracks, cot, names, transcriber)
+
+
+def score_counts(set_dir, tracks, transcriber, names=None):
+    """Counts only: datasets() is polled, and a set's stem list does not belong in every answer.
+
+    stem_missing is how many tracks still need a voice or band sheet for this transcriber. The mix's score does not cover them.
+    """
+    if names is None:
+        names = _cache_names(set_dir)
+    out = {}
+    for cot in ("full", "melody"):
+        rep = score_report(set_dir, cot, transcriber, tracks, names)
+        out[cot] = {"metadata": rep["metadata"], "transcribed": rep["transcribed"],
+                    "missing": len(rep["missing"]), "refused": len(rep["refused"]),
+                    "stem_missing": len(stem_score_gaps(set_dir, cot, transcriber, tracks, names))}
+    return out
+
+
+def scores_by_transcriber(set_dir, tracks):
+    """Counts for every transcriber. The page follows the one chosen now; another suffix is not this one's sheet."""
+    names = _cache_names(set_dir)
+    return {tx: score_counts(set_dir, tracks, tx, names) for tx in TRANSCRIBERS}
 
 
 def set_transcriber(set_dir):
@@ -343,13 +426,50 @@ def scan(kit, name):
         own = f.with_suffix(".style.txt")              # HERESY 1073: a track's own style beside it (its own labels)
         rows.append({"file": str(f.relative_to(d)), "seconds": _seconds(f), "bytes": f.stat().st_size,
                      "lyrics": lyrics[:12000], "lyrics_from": str(t.relative_to(d)) if t else "", "hints": hints[:12],
-                     "style": " ".join(own.read_text(encoding="utf-8").split()) if own.is_file() else ""})
+                     "style": " ".join(own.read_text(encoding="utf-8").split()) if own.is_file() else "",
+                     "score": _score_beside(f)})
     if any(d.rglob("*.parquet")):                       # HERESY 1626: a dataset's parquet shards: a row a track, the first 5000 shown
         for r in _trk().raw_rows(str(d)):
             lyrics, hints = clean_lyrics(r["lyrics"]) if r["lyrics"] else ("", [])
             rows.append({"file": r["file"], "seconds": r["seconds"], "bytes": r["bytes"], "lyrics": lyrics[:12000],
                          "lyrics_from": "parquet" if r["lyrics"] else "", "hints": hints[:12], "style": r["style"], "title": r["title"]})
     return {"name": name, "tracks": rows}
+
+
+def _score_beside(f):
+    """An ABC score next to the audio: NAME.abc, or NAME.full.abc / NAME.melody.abc for one mode."""
+    return any(f.with_suffix(ext).is_file() for ext in (".abc", ".full.abc", ".melody.abc"))
+
+
+def _read_abc(path):
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8")
+    return text if len(text) <= 250_000 else ""
+
+
+def _track_score_fields(src_file, spec):
+    """Scores copied onto dataset.json. A text in the request wins; otherwise the file beside the audio.
+    A score kept here is what Full and Melody train on, ahead of a later transcription."""
+    scores = {}
+    given = spec.get("scores") if isinstance(spec.get("scores"), dict) else {}
+    for cot in ("full", "melody"):
+        text = given.get(cot) if isinstance(given.get(cot), str) else ""
+        if not text.strip() and src_file is not None:
+            text = _read_abc(src_file.with_suffix(f".{cot}.abc"))
+        if text.strip():
+            scores[cot] = text
+    plain = spec.get("score") if isinstance(spec.get("score"), str) else ""
+    if not plain.strip() and isinstance(spec.get("abc"), str):
+        plain = spec.get("abc")
+    if not plain.strip() and src_file is not None:
+        plain = _read_abc(src_file.with_suffix(".abc"))
+    out = {}
+    if scores:
+        out["scores"] = scores
+    if plain.strip():
+        out["score"] = plain
+    return out
 
 
 def caption(style, lyrics):
@@ -363,7 +483,8 @@ PREP = {}            # dataset name -> its preparation job
 
 
 def prepare(kit, spec):
-    """spec: {from, name, style, tracks: [{file, include, style, lyrics}]}. Writes datasets/prepared/NAME/."""
+    """spec: {from, name, style, tracks: [{file, include, style, lyrics, score?, scores?: {full, melody}}]}. Writes datasets/prepared/NAME/.
+    A score in the request, or NAME.abc / NAME.full.abc / NAME.melody.abc beside the audio, is kept on the track."""
     P = paths(kit)
     src = _safe_dir(P["raw"], str(spec.get("from", "")))
     name = str(spec.get("name") or src.name)
@@ -406,8 +527,11 @@ def prepare(kit, spec):
                     f.unlink()
                 text = caption(t.get("style") or spec.get("style", ""), t.get("lyrics", ""))
                 (tmp / (stem + ".txt")).write_text(text, encoding="utf-8")
-                rows.append({"stem": stem, "file": t["file"], "seconds": _seconds(tmp / (stem + ".wav")),
-                             "lyrics": bool(str(t.get("lyrics") or "").strip())})
+                row = {"stem": stem, "file": t["file"], "seconds": _seconds(tmp / (stem + ".wav")),
+                       "lyrics": bool(str(t.get("lyrics") or "").strip())}
+                src_audio = None if _parquet_ref(t["file"]) else f
+                row.update(_track_score_fields(src_audio, t))
+                rows.append(row)
                 job["done"] = i + 1
             json.dump({"from": src.name, "style": spec.get("style", ""), "tracks": rows, "made": time.strftime("%Y-%m-%d %H:%M")},
                       open(tmp / "dataset.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
@@ -1304,12 +1428,25 @@ def train(kit, spec, gpu_picker, more_cards=None):
         o["engine"] = "ruach"
         if o["cot"] not in ("off", "full", "melody"):
             raise ValueError("mode: off, full or melody")
-        if o["cot"] != "off" and not ((kit / "build" / "build" / "yue-transcribe").is_file() and list(studio_paths.at(studio_paths.MISC, kit).glob("SheetSage2-*.gguf"))):
-            raise FileNotFoundError(f"score mode needs the engine's transcriber (build/build/yue-transcribe and {studio_paths.MISC}/SheetSage2-*.gguf)")   # HERESY 1420
         if o["transcriber"] not in TRANSCRIBERS:  # HERESY 2328: the sheets by SheetSage2 or SheetSage2-Refined; 2359: SheetSage2 by its angles
             raise ValueError("transcriber: sheetsage2-bf16 (Heretical), refined (Refined) or sheetsage2 (Standard, the sheets before 2.0.7)")   # HERESY 2377
-        if o["cot"] != "off" and o["transcriber"] == "refined" and not (studio_paths.at(studio_paths.MISC, kit) / "SheetSage2-Refined-F16.gguf").is_file():
-            raise FileNotFoundError(f"SheetSage2-Refined is not installed: {studio_paths.MISC}/SheetSage2-Refined-F16.gguf")
+        if o["cot"] != "off":
+            # a score kept on the set, or a sheet already written, needs no transcriber; tracks still without either do
+            rep = score_report(P["prepared"] / dataset, o["cot"], o["transcriber"])
+            ready = (kit / "build" / "build" / "yue-transcribe").is_file() and bool(list(studio_paths.at(studio_paths.MISC, kit).glob("SheetSage2-*.gguf")))
+            # separation transcribes the voice and the band on their own; the mix's score does not cover either
+            stem_missing = stem_score_gaps(P["prepared"] / dataset, o["cot"], o["transcriber"]) if o["do_separation"] else []
+            blocked = _trainer_prompt().scores_block_reason(rep, ready, stem_missing)
+            if blocked:
+                kind, why = blocked
+                if kind == "transcriber":
+                    raise FileNotFoundError(why)
+                raise ValueError(why)
+            if (rep["missing"] or stem_missing) and o["transcriber"] == "refined" and not (studio_paths.at(studio_paths.MISC, kit) / "SheetSage2-Refined-F16.gguf").is_file():
+                raise FileNotFoundError(f"SheetSage2-Refined is not installed: {studio_paths.MISC}/SheetSage2-Refined-F16.gguf")
+            o["score_report"] = {"metadata": rep["metadata"], "transcribed": rep["transcribed"],
+                                 "missing": len(rep["missing"]), "refused": len(rep["refused"]),
+                                 "stem_missing": len(stem_missing)}
         if o["do_separation"] and not (studio_paths.at(studio_paths.REFINER_SEPARATION, kit) / "roformer" / "model_bs_roformer_ep_317_sdr_12.9755.ckpt").is_file():
             raise FileNotFoundError(f"the separation needs the Studio's separator ({studio_paths.REFINER_SEPARATION}/roformer/model_bs_roformer_ep_317_sdr_12.9755.ckpt)")   # HERESY 1422
         ckpt, o["quant"], base = base_checkpoint(P, spec)   # HERESY 1792: a base the run names (a merge), else the Studio's own

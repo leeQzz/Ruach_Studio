@@ -837,7 +837,7 @@
       var long = (r.seconds || 0) > 360, short = (r.seconds || 0) < 30;
       return '<div class="tr-track' + (r.include ? "" : " is-out") + '"><label class="tr-in"><input type="checkbox" data-in="' + i + '"' + (r.include ? " checked" : "") + " /></label>" +
         '<div class="tr-tbody"><div class="tr-thead"><span class="tr-file">' + esc(r.file) + '</span><span class="tr-sec' + (long || short ? " is-bad" : "") + '">' + clock(r.seconds) +
-        (long ? " · long: the music half trains on the whole song" : short ? " · under 0:30" : "") + (r.lyrics ? "" : " · no lyrics") + '</span><button type="button" class="btn ghost small" data-lyr="' + i + '">' + (r.lyrics ? "Lyrics ✓" : "Lyrics") + "</button></div>" +
+        (long ? " · long: the music half trains on the whole song" : short ? " · under 0:30" : "") + (r.lyrics ? "" : " · no lyrics") + (r.score ? " · score" : "") + '</span><button type="button" class="btn ghost small" data-lyr="' + i + '">' + (r.lyrics ? "Lyrics ✓" : "Lyrics") + "</button></div>" +
         '<div class="tr-edit" data-edit="' + i + '" hidden>' + (r.from ? '<span class="row-hint">lyrics from ' + esc(r.from) + (r.hints.length ? " · hints (not in the caption): " + esc(r.hints.join(" · ")) : "") + "</span>" : "") +
         '<input type="text" data-style="' + i + '" value="' + esc(r.style) + '" placeholder="a style of its own (empty: the shared one)" />' +
         '<textarea rows="8" data-lyrics="' + i + '" placeholder="[Verse]\nthe lyrics exactly as sung (empty for an instrumental)">' + esc(r.lyrics) + "</textarea></div></div></div>";
@@ -962,6 +962,38 @@
       // HERESY 2377: Standard (exact angles) left the page; a set whose sheets it wrote shows it, read-only, and keeps it
       $("tr_transcriber").disabled = own === "sheetsage2";
     }
+    scoreSay();
+  }
+  function chosenTranscriber() {
+    var el = $("tr_transcriber");
+    return el && el.value ? el.value : "sheetsage2-bf16";
+  }
+  function scoreNow(cot) {
+    var set = ((state.data && state.data.prepared) || []).filter(function (p) { return p.name === state.set; })[0];
+    var table = set && set.scores, tx = chosenTranscriber();
+    if (!table || !cot || cot === "off" || !table[tx]) return null;
+    return table[tx][cot] || null;
+  }
+  function scoreLine(s, sep) {
+    if (!s) return "";
+    if (!s.metadata && !s.transcribed && !s.missing && s.refused) return tr("This set has no score left: the run is refused.");
+    var bits = [];
+    if (s.metadata) bits.push(tr("{0} with a score on the set").replace("{0}", s.metadata));
+    if (s.transcribed) bits.push(tr("{0} transcribed").replace("{0}", s.transcribed));
+    if (s.missing) bits.push(tr("{0} still to transcribe").replace("{0}", s.missing));
+    if (s.refused) bits.push(tr("{0} refused, those train Direct").replace("{0}", s.refused));
+    if (sep && s.stem_missing) bits.push(tr("{0} whose voice or band is still to transcribe").replace("{0}", s.stem_missing));
+    return (bits.join(", ") || tr("no tracks")) + ".";
+  }
+  function scoreSay() {
+    var el = $("trScoreSay");
+    if (!el) return;
+    var cot = $("tr_cot") && $("tr_cot").value;
+    var s = scoreNow(cot);
+    if (!s) { el.hidden = true; el.textContent = ""; return; }
+    var mode = cot === "full" ? "Full" : "Melody";
+    el.hidden = false;
+    el.textContent = mode + ": " + scoreLine(s, $("tr_sep") && $("tr_sep").checked);
   }
   function setKind(k) {
     state.kind = k;
@@ -1006,6 +1038,7 @@
       if (el.querySelector("#trRunName, #tr_engine")) return;
       el.hidden = !!ext || (el.id === "trBaseField" && bases < 2) || (el.contains($("tr_transcriber")) && $("tr_cot").value === "off");   // HERESY 2359: Direct writes no sheets
     });
+    scoreSay();
     if ($("trKinds")) $("trKinds").parentNode.hidden = !!ext;
     var box = $("trExtKnobs");
     if (!box) { box = document.createElement("div"); box.id = "trExtKnobs"; box.className = "tr-knobs"; knobs.insertAdjacentElement("afterend", box); }
@@ -1129,7 +1162,11 @@
         (spec.cards > 1 ? "\n\n" + tr("On {0} cards at once: each learns its own songs, their lessons averaged every step.").replace("{0}", spec.cards) : "") +
         (spec.lr_tail_epochs > 0 ? "\n\n" + tr("The learning rate fades over the last {0} epochs to {1} % of itself.").replace("{0}", spec.lr_tail_epochs).replace("{1}", Math.round(spec.lr_tail_floor * 100)) : "") +
         (guard ? "\n\n" + tr("The meter and the guard: {0}.").replace("{0}", guard) : "") +
-        (baseSaid ? "\n\n" + tr("On the base {0}.").replace("{0}", baseSaid) : ""), { ok: "Start training" });   // HERESY 2321   // HERESY 1752   // HERESY 1631   // 1166: "Train" is the step's name
+        (baseSaid ? "\n\n" + tr("On the base {0}.").replace("{0}", baseSaid) : "") +
+        (spec.cot && spec.cot !== "off" ? "\n\n" + tr("Mode {0}: the music half learns to write the score first, the same prompt a song in that mode uses. A track with no score is transcribed before the run; one whose score was refused trains Direct.").replace("{0}", spec.cot === "full" ? "Full" : "Melody") + (function () {
+          var s = scoreNow(spec.cot);
+          return s ? "\n" + scoreLine(s, spec.do_separation) : "";
+        })() : ""), { ok: "Start training" });   // HERESY 2321   // HERESY 1752   // HERESY 1631   // 1166: "Train" is the step's name
     }).then(function (ok) {
       if (!ok) return;
       return api("/train/run", spec).then(function () { toast("Training " + spec.name); state.sel = spec.name; keep("yue2.trRun", spec.name); return load().then(function () { showPane("run"); }); });
@@ -1399,6 +1436,8 @@
     $("trKinds").addEventListener("click", function (e) { var b = e.target.closest("[data-kind]"); if (b) setKind(b.dataset.kind); });
     $("tr_quant").addEventListener("change", function () { if (state.data) { warn(); gate(); paintPills(); } });
     $("tr_cot").addEventListener("change", engineKnobs);   // HERESY 2359: the transcriber only where sheets are written
+    if ($("tr_transcriber")) $("tr_transcriber").addEventListener("change", scoreSay);   // the counts are that transcriber's sheets, not the set's own
+    if ($("tr_sep")) $("tr_sep").addEventListener("change", scoreSay);   // the voice and the band are a gap only while separation is on
     $("tr_engine").addEventListener("change", function () {
       $("tr_quant").value = "bf16";                       // Viktor: nothing quantized in our trainer; HERESY 2321: a plugin's trainer says its own
       keep("yue2.trEngine", this.value);

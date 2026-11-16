@@ -87,10 +87,46 @@
       .then(function () { clearInterval(ticker); $("inRun").disabled = false; });
   }
 
+  function qualityLoop() {
+    if (!state.take) { say("Open a take first", true); return; }
+    var btn = $("qualityLoop");
+    btn.disabled = true;
+    say("Singing the flagged sections again…");
+    fetch("/lab/quality/loop", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: state.take.name, iterations: 2 }) })
+      .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.error || r.status); return b; }); })
+      .then(function (b) { return followLoop(b.id); })
+      .then(function (st) {
+        var named = (st.suggest || []).map(function (s) { return s === "debuzz" ? "Debuzz" : s === "remaster" ? "Remaster" : s; });
+        var sung = (st.passes || []).reduce(function (n, p) { return n + ((p.redo || []).length ? 1 : 0); }, 0);
+        var line = sung ? (sung + " pass" + (sung === 1 ? "" : "es")) : "nothing to sing again";
+        if (named.length) line += " · " + named.join(", ");
+        if (st.take && st.take !== state.take.name) line += " · " + st.take;
+        say(st.status === "failed" ? (st.error || "Could not") : line, st.status === "failed");
+        (st.passes || []).forEach(function (p) { if (p.section && window.ruachFollowSection) window.ruachFollowSection(p.section); });
+      })
+      .catch(function (e) { say("Could not: " + (e.message || e), true); })
+      .then(function () { btn.disabled = false; });
+  }
+
+  function followLoop(id) {
+    function ask() {
+      return fetch("/lab/quality/loop?id=" + encodeURIComponent(id)).then(function (r) {
+        return r.json().then(function (b) {
+          if (!r.ok) throw new Error(b.error || r.status);
+          if (b.status === "queued" || b.status === "running") return new Promise(function (res) { setTimeout(res, 2000); }).then(ask);
+          return b;
+        });
+      });
+    }
+    return ask();
+  }
+
   function init(hooks) {
     if (!$("inspectPanel")) return;
     state.hooks = hooks || {};
     $("inRun").addEventListener("click", function () { run((window.RuachI18n ? RuachI18n.en($("inRun")) : $("inRun").textContent) === "Inspect again"); });
+    if ($("qualityLoop")) $("qualityLoop").addEventListener("click", qualityLoop);
     $("inSource").addEventListener("change", function () { state.source = this.value; $("inResult").innerHTML = ""; $("inRun").textContent = "Inspect"; });
     $("inResult").addEventListener("click", function (e) {
       var b = e.target.closest("[data-in-seek]");

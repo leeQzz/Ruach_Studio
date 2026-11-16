@@ -2127,6 +2127,7 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
           <div class="dv-actions">
             <label class="field" data-tip="Which file is measured: the take, or any file made from it."><span class="label">Source</span><select id="inSource"><option value="">the take</option></select></label>
             <button type="button" class="btn primary small" id="inRun" data-tip="Measure the chosen source for what may be wrong: held tones, the VAE's buzz, clicks, clipping, dropouts, stereo that fights itself">Inspect</button>
+            <button type="button" class="btn ghost small" id="qualityLoop" data-tip="Sing again only the sections this inspection flags, twice at most. A fault of the whole take, such as the VAE's buzz, is not sung again: Debuzz or Remaster is named instead">Quality loop</button>
             <span class="row-hint mono" id="inState"></span>
           </div>
           <div id="inResult"></div>

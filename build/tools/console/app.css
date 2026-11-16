@@ -2004,6 +2004,7 @@ fieldset.sound { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; 
 
 /* the style box grows with its text; the meter under it counts the prompt against the context */
 #style { field-sizing: content; min-height: 76px; max-height: 50vh; }
+#excludeStyles { field-sizing: content; min-height: 52px; max-height: 30vh; }
 .size-meter { display: block; margin: 4px 0 0; white-space: pre-line; }   /* HERESY 1009: the warnings go on their own line */
 .size-meter.is-warn { color: var(--amber); }
 .size-meter.is-over { color: var(--bad); }

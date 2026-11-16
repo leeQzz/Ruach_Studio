@@ -5942,7 +5942,7 @@ RuachI18n.add("zh", {
 "{0} cloned: its window holds its own settings": "已克隆{0}：它的窗口保存自己的设置",
 "Delete the clone «{0}»? Its settings go with it.": "删除克隆「{0}」？它的设置会一起删除。",
 "Eight clones of one step are enough": "一个步骤最多八个克隆",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "每次 Generate 都会把这个标题的风格、歌词和乐谱与录音分开保存：它的版本、两版的差异、把某一版放回表单",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "每次 Generate 都会把这个标题的风格、排除风格、歌词和乐谱与录音分开保存：它的版本、两版的差异、把某一版放回表单",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "每次 Generate 的文字，按标题与录音分开保存：删除录音也不会带走这些文字",
 "Musician's versions": "音乐人的版本",
 "The Musician's version was not kept: {0}": "未能保存音乐人的版本：{0}",
@@ -5959,7 +5959,7 @@ RuachI18n.add("zh", {
 "Trash ({0})": "回收站（{0}）",
 "Bring back": "恢复",
 "deleted from the library; its words are kept here": "已从库中删除；它的文字保存在这里",
-"Its title, style, lyrics and score into the Musician's form": "把它的标题、风格、歌词和乐谱放进音乐人的表单",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "把它的标题、风格、排除风格、歌词和乐谱放进音乐人的表单",
 "★ Starred": "★ 已加星",
 "☆ Star": "☆ 加星",
 "Label…": "标签…",
@@ -5975,7 +5975,7 @@ RuachI18n.add("zh", {
 "Delete version #{0}?": "删除版本 #{0}？",
 "It goes into this title's trash, from where it comes back.": "它会进入这个标题的回收站，可以从那里恢复。",
 "Put version #{0} into the Musician's form?": "把版本 #{0} 放进音乐人的表单？",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "表单里现在的标题、风格、歌词和乐谱会被替换。由它们生成的内容已经保存在这里。",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "表单里现在的标题、风格、排除风格、歌词和乐谱会被替换。由它们生成的内容已经保存在这里。",
 "Version #{0} is in the form": "版本 #{0} 已在表单中",
 "No version is kept yet: every Generate keeps its words here": "还没有版本：每次 Generate 都会在这里保存它的文字",
 "The Musician's versions": "音乐人的版本",
@@ -9280,4 +9280,13 @@ RuachI18n.add("zh", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("zh", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "当歌曲的请求没有指定 VAE 时，用来解码它的 VAE（已保存的提示词、其他客户端）。表单中的 VAE 按钮按每首歌选择，已完成的歌曲可在其页面换用另一个。"
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("zh", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "本次未使用 exclude_styles：引导为 1.0 时只有一条分支",
+"Exclude styles": "排除风格",
+"drones, beats, drums…": "持续音、节拍、鼓…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "这首歌不该有的东西。引导的无条件分支带着这些风格，而不是空风格，从而把歌曲从它们推开。留空则该分支保持原样。"
 });

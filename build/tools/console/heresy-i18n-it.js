@@ -6057,7 +6057,7 @@ RuachI18n.add("it", {
 "{0} cloned: its window holds its own settings": "{0} clonato: la sua finestra tiene le sue regolazioni",
 "Delete the clone «{0}»? Its settings go with it.": "Eliminare il clone «{0}»? Le sue regolazioni se ne vanno con lui.",
 "Eight clones of one step are enough": "Otto cloni di un passo bastano",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Ogni Generate tiene lo stile, il testo e la partitura di questo titolo a parte dai take: le sue versioni, la differenza di due, una di nuovo nel modulo",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Ogni Generate tiene lo stile, gli stili esclusi, il testo e la partitura di questo titolo a parte dai take: le sue versioni, la differenza di due, una di nuovo nel modulo",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Le parole di ogni Generate, tenute sotto il loro titolo a parte dai take: un take eliminato non se le porta mai via",
 "Musician's versions": "Versioni del Musicista",
 "The Musician's version was not kept: {0}": "La versione del Musicista non è stata tenuta: {0}",
@@ -6074,7 +6074,7 @@ RuachI18n.add("it", {
 "Trash ({0})": "Cestino ({0})",
 "Bring back": "Riporta",
 "deleted from the library; its words are kept here": "eliminato dalla libreria; le sue parole sono tenute qui",
-"Its title, style, lyrics and score into the Musician's form": "Il suo titolo, stile, testo e partitura nel modulo del Musicista",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Il suo titolo, stile, stili esclusi, testo e partitura nel modulo del Musicista",
 "★ Starred": "★ Con stella",
 "☆ Star": "☆ Stella",
 "Label…": "Etichetta…",
@@ -6090,7 +6090,7 @@ RuachI18n.add("it", {
 "Delete version #{0}?": "Eliminare la versione #{0}?",
 "It goes into this title's trash, from where it comes back.": "Va nel cestino di questo titolo, da dove torna.",
 "Put version #{0} into the Musician's form?": "Mettere la versione #{0} nel modulo del Musicista?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Il titolo, lo stile, il testo e la partitura che ci sono ora vengono sostituiti. Quello che ne è già stato generato è tenuto qui.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Il titolo, lo stile, gli stili esclusi, il testo e la partitura che ci sono ora vengono sostituiti. Quello che ne è già stato generato è tenuto qui.",
 "Version #{0} is in the form": "La versione #{0} è nel modulo",
 "No version is kept yet: every Generate keeps its words here": "Ancora nessuna versione: ogni Generate tiene qui le sue parole",
 "The Musician's versions": "Versioni del Musicista",
@@ -9400,4 +9400,13 @@ RuachI18n.add("it", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("it", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "Il VAE con cui si decodifica una canzone quando la sua richiesta non ne nomina nessuno (prompt salvati, altri client). I pulsanti VAE del modulo lo scelgono per ogni canzone, e una canzone finita può averne un altro dalla sua pagina."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("it", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles non è stato usato: una guida di 1.0 tiene un solo ramo",
+"Exclude styles": "Escludi stili",
+"drones, beats, drums…": "droni, beat, batteria…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Ciò che la canzone non deve avere. Il passaggio incondizionato della guida porta questi stili al posto di uno stile vuoto, così la canzone viene allontanata da essi. Vuoto, quel passaggio resta com'è."
 });

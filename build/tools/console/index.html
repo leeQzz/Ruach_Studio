@@ -1082,7 +1082,7 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
               <select id="wrHandPick" aria-label="Load a document from the Writer" data-tip="A song from the Writer into this form: its title, style and lyrics. It stays in hand, so the takes made from it are linked to it in the Writer."></select>
               <!-- HERESY 2542 (the UIX audit of 13.11.2026, №25): the Writer's card in icons, their words their labels and tips -->
               <button type="button" class="btn ghost small icon-btn mu-ico" id="wrHandSave" data-ui="book-plus" aria-label="Save to Writer…" data-tip="Keep the song as it is now (title, style, lyrics and every knob) as a document in the Writer"></button>
-              <button type="button" class="btn ghost small icon-btn mu-ico" id="crVersions" data-ui="history" aria-label="Versions" data-tip="Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form"></button>
+              <button type="button" class="btn ghost small icon-btn mu-ico" id="crVersions" data-ui="history" aria-label="Versions" data-tip="Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form"></button>
             </span>
           </div>
           <!-- HERESY 1006: the title on its own line at full width, the two seeds side by side below it -->
@@ -1117,6 +1117,10 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
             <span class="key-check is-hidden" id="keyCheck"><span id="keyCheckText"></span>
               <button type="button" class="btn ghost small" id="keyToScore"></button>
               <button type="button" class="btn ghost small" id="keyToStyle"></button></span>
+          </label>
+          <label class="field exclude-field" data-fold="exclude">
+            <span class="label">Exclude styles</span>
+            <textarea id="excludeStyles" rows="2" data-max-rows="6" maxlength="2000" spellcheck="false" placeholder="drones, beats, drums…" data-tip="What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is."></textarea>
           </label>
           <!-- HERESY 1032: saved styles, kept on Forge (heresy-presets.js) -->
           <div class="lib-row" id="styleLibRow">

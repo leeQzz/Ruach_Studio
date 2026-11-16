@@ -19,8 +19,9 @@ static const yyjson_write_flag WRITE_FLAGS =
     YYJSON_WRITE_PRETTY | YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_FP_TO_FLOAT;
 
 void request_init(Yue2Request * r) {
-    r->style  = "";
-    r->lyrics = "";
+    r->style           = "";
+    r->exclude_styles  = "";
+    r->lyrics          = "";
     r->abc    = "";
     r->cot    = "full";
 
@@ -266,6 +267,12 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     if ((v = yyjson_obj_get(obj, "style")) && yyjson_is_str(v)) {
         r->style = yy_str(v);
     }
+    // Exclude styles: the unconditional CFG pass. Joined to one line here, the
+    // same way the page joins the box, so a take stores what the model reads.
+    // A blank, or anything that is not text, leaves the instruction-only pass.
+    if ((v = yyjson_obj_get(obj, "exclude_styles")) && yyjson_is_str(v)) {
+        r->exclude_styles = yue2_style_line(yy_str(v));
+    }
     if ((v = yyjson_obj_get(obj, "lyrics")) && yyjson_is_str(v)) {
         r->lyrics = yy_str(v);
     }
@@ -500,6 +507,9 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
 
     if (!sparse || r->style != d.style) {
         yyjson_mut_obj_add_strncpy(doc, root, "style", r->style.c_str(), r->style.size());
+    }
+    if (!sparse || r->exclude_styles != d.exclude_styles) {
+        yyjson_mut_obj_add_strncpy(doc, root, "exclude_styles", r->exclude_styles.c_str(), r->exclude_styles.size());
     }
     if (!sparse || r->lyrics != d.lyrics) {
         yyjson_mut_obj_add_strncpy(doc, root, "lyrics", r->lyrics.c_str(), r->lyrics.size());

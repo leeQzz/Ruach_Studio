@@ -1867,7 +1867,7 @@
     $("newSong").click();
   });
   function newSong() {
-    ["title", "titleVersion", "style", "lyrics", "abc", "lmSeed", "soundSeed", "cfg", "cfgLyrics"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too   // HERESY 1397
+    ["title", "titleVersion", "style", "excludeStyles", "lyrics", "abc", "lmSeed", "soundSeed", "cfg", "cfgLyrics"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too   // HERESY 1397
     $("cfgLyrics").value = LYRICS_CFG;                   // HERESY 1400: a new song starts with the two apart
     setCot("full");                                   // HERESY 1169 · 1253 (Viktor 08.10.2026: «Full as the default»; 1167 had Direct)
     $("instrumental").checked = false;
@@ -1906,9 +1906,9 @@
   // lyrics, the score), the seeds and loaded music codes with them; the machine stays as set: mode, sampling, guidance,
   // sliders, LoRAs, Instrumental, VAE and output. New song puts the machine back to its defaults too.
   function clearWords() {
-    ["title", "titleVersion", "style", "lyrics", "abc", "lmSeed", "soundSeed"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too
+    ["title", "titleVersion", "style", "excludeStyles", "lyrics", "abc", "lmSeed", "soundSeed"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too
     setCodes(null);
-    ["style", "lyrics", "abc"].forEach(function (id) { $(id).dispatchEvent(new Event("input", { bubbles: true })); });
+    ["style", "excludeStyles", "lyrics", "abc"].forEach(function (id) { $(id).dispatchEvent(new Event("input", { bubbles: true })); });
     $("scoreDrawer").open = false;
     growLyrics();
     paintDice();
@@ -1927,6 +1927,7 @@
     keepForm("before");                                // HERESY 1596: the form as it was, kept before an example replaces it
     setTitle(ex.title || "");   // HERESY 1614
     $("style").value = String(ex.style || "").trim();
+    if ($("excludeStyles")) $("excludeStyles").value = String(ex.exclude_styles || "");   // an example that names none leaves the last exclusion behind otherwise, and Generate would send it
     $("lyrics").value = ex.lyrics || "";
     $("abc").value = ex.abc || "";
     $("lmSeed").value = ex.seed !== undefined && ex.seed !== null && /^\d+$/.test(String(ex.seed)) ? String(ex.seed) : "";
@@ -1936,7 +1937,7 @@
     setCot(ex.cot || "full");
     $("instrumental").checked = ex.instrumental === true;   // HERESY 2136: an example is sung unless it says it is an instrumental
     if (ex.abc) $("scoreDrawer").open = true;
-    ["style", "lyrics", "abc"].forEach(function (id) { $(id).dispatchEvent(new Event("input", { bubbles: true })); });
+    ["style", "excludeStyles", "lyrics", "abc"].forEach(function (id) { if ($(id)) $(id).dispatchEvent(new Event("input", { bubbles: true })); });
     growLyrics();
     toast("Example loaded: " + (ex.title || "untitled") + (ex.abc ? " (with its score)" : "") + (ex.cot === "off" ? " · Direct mode" : ""));
   }
@@ -2103,11 +2104,13 @@
     // (loose, HERESY 1032: the form read as it stands, for a saved profile, with no checks on the texts)
     if (abc && cot === "off" && !instrumental && !loose) throw new Error("Direct mode ignores a supplied score — pick full or melody");
     var style = styleOneLine($("style").value), lyrics = $("lyrics").value;   // HERESY 1421
+    var exclude = styleOneLine($("excludeStyles") ? $("excludeStyles").value : "");
     if (!style && !lyrics.trim() && !STATE.codes && !loose) throw new Error("Write a style prompt or lyrics first");
     // HERESY 2462: a title typed that the names' rule refuses is said, and nothing is sent (its field offers the cleaned one when left)
     var typedTitle = cleanTitle(fullTitle()).text, titleWhy = !loose && typedTitle && window.HeresyNames ? window.HeresyNames.refusal(typedTitle, { max: TITLE_MAX }) : "";
     if (titleWhy) throw new Error(titleWhy);
     var body = { title: songTitle(), style: style, lyrics: lyrics, cot: cot };
+    if (exclude) body.exclude_styles = exclude;   // the unconditional CFG pass; empty leaves it as the instruction alone
     if (abc) body.abc = abc;
     var lm = readSeed("lmSeed", "Music seed"), sound = readSeed("soundSeed", "Sound seed");
     if (lm !== null) body.lm_seed = lm;
@@ -2400,7 +2403,7 @@
     return true;
   }
   // HERESY 2133 (the review): the words a plan's song keeps as its Creator version (1519) while the form holds another song's: its own request's
-  function planWords(body, abc) { return { title: body.title, style: body.style || "", lyrics: body.lyrics || "", abc: abc || "" }; }
+  function planWords(body, abc) { return { title: body.title, style: body.style || "", exclude_styles: body.exclude_styles || "", lyrics: body.lyrics || "", abc: abc || "" }; }
 
   function instrumentalAfterPlan(job, abc) {
     var pending = planTake(job, "instrumental");
@@ -2667,7 +2670,7 @@
     // never takes the other's versions with it, nor its STATE.groups record
     var group = "g" + Date.now() + "-" + (queueVersions.seq = (queueVersions.seq || 0) + 1), baseTitle = body.title, first = null, chain = Promise.resolve();
     var G = STATE.groups[group] = { versions: versions, sent: 0, unsent: 0, late: 0, cancelled: false, done: false };
-    var words = held || { title: baseTitle, style: $("style").value, lyrics: $("lyrics").value, abc: $("abc").value };   // HERESY 1519: as the form holds them
+    var words = held || { title: baseTitle, style: $("style").value, exclude_styles: $("excludeStyles") ? $("excludeStyles").value : "", lyrics: $("lyrics").value, abc: $("abc").value };   // HERESY 1519: as the form holds them
     var variations = body.synth_batch_size || 1;
     $("generateBtn").disabled = true;
     for (var i = 0; i < passes; i++) {
@@ -2765,6 +2768,7 @@
     keepForm("before");                                // HERESY 1596: a take's or a recipe's words over the form: the form as it was kept
     setTitle(opts.title !== undefined ? opts.title : String(req.title || ""));   // HERESY 1614: «Name vN.N» into its two fields
     $("style").value = String(req.style || "");
+    if ($("excludeStyles")) $("excludeStyles").value = String(req.exclude_styles || "");
     $("lyrics").value = String(req.lyrics || "");
     $("abc").value = String(req.abc || "");
     if (req.abc) $("scoreDrawer").open = true;
@@ -2850,7 +2854,7 @@
   // prompt file does not come into the form as written is said when it opens. A file that loads «clean» but lost a field, a
   // mode or an adapter on the way lies; each such place says what was there and what the form holds instead.
   // HERESY 1607, 1609: harmony and abc_continue among a prompt file's keys
-  var PROMPT_KEYS = ["title", "style", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
+  var PROMPT_KEYS = ["title", "style", "exclude_styles", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
     "vae", "solver", "nar_ladder", "nar_pieces", "sliders", "loras", "lora_groups", "plan_only", "semantic_tokens", "semantic_keep", "parent", "duration", "steps",
     "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "debuzz", "score_guard", "seconds", "instrumental"];
   var GROUP_NAMES = { abc: "Score planner", semantic: "Music tokens" };
@@ -3289,6 +3293,7 @@
         .then(function () { return post("/synth", sent); });
     }).then(function (data) {
       var job = registerJob(data.id, meta, body);
+      if (data && data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
       paintAllRuns();
       return job;
     });
@@ -3355,6 +3360,7 @@
 
   function applyStatus(job, data) {
     var status = data.status;
+    if (data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
     // Synth jobs report the seeds the server resolved, from the moment they are queued.
     if (data.lm_seed !== undefined && data.lm_seed !== null) {
       STATE.statusKnowsQueue = true;
@@ -3558,7 +3564,7 @@
       var mine = job.kind !== "external";
       if (window.HeresyCollection && mine) window.HeresyCollection.landed(filed, job.ws);   // HERESY 1041: into the workspace in hand
       if (window.HeresyWriter && mine) window.HeresyWriter.landed(takes, job.request && job.request.title);   // HERESY 1047: to the document in hand (2493: the same song only)
-      if (window.HeresyVersions && mine && job.kind === "song" && job.words) window.HeresyVersions.keep(job.words, takes, job.request && job.request.cot, "generate", (function () { var r = Object.assign({}, job.request || {}); ["title", "style", "lyrics", "abc", "semantic_tokens", "parent"].forEach(function (k) { delete r[k]; }); return r; })());   // HERESY 1519 · 1596
+      if (window.HeresyVersions && mine && job.kind === "song" && job.words) window.HeresyVersions.keep(job.words, takes, job.request && job.request.cot, "generate", (function () { var r = Object.assign({}, job.request || {}); ["title", "style", "exclude_styles", "lyrics", "abc", "semantic_tokens", "parent"].forEach(function (k) { delete r[k]; }); return r; })());   // HERESY 1519 · 1596
       return refreshLibrary().catch(function () {}).then(function () { return nameVersions(job); });
     }).then(function () {
       paintAllRuns();
@@ -6497,6 +6503,7 @@
       $("abc").value = req.abc || "";
       if (!fromSound && req.abc && !scoreFrom()) scoreWrittenBy(req.loras || [], "its take");   // HERESY 1327
       $("style").value = take.style;
+      if ($("excludeStyles")) $("excludeStyles").value = String((!fromSound && req.exclude_styles) || "");
       $("lyrics").value = take.lyrics;
       var tp = splitTitle(displayTitle(take)); setTitleParts(tp.name + " (edit)", tp.version);   // HERESY 1614
       if (MODES[cot] && cot !== "off") setCot(cot);
@@ -12304,7 +12311,7 @@
   var DRAFT_KEY = "yue2.draft", draftTimer = null;
   function draftSnapshot() {
     var req = {
-      title: fullTitle(), style: $("style").value, lyrics: $("lyrics").value, abc: $("abc").value,   // HERESY 1614: with its version
+      title: fullTitle(), style: $("style").value, exclude_styles: $("excludeStyles") ? $("excludeStyles").value : "", lyrics: $("lyrics").value, abc: $("abc").value,   // HERESY 1614: with its version
       lm_seed: $("lmSeed").value.trim(), seed: $("soundSeed").value.trim(), cot: currentCot(),
       cfg_scale: $("cfg").dataset.touched && $("cfg").value.trim() !== "" ? parseFloat($("cfg").value) : -1,
       cfg_lyrics: $("cfgLyrics").value.trim() !== "" ? parseFloat($("cfgLyrics").value) : -1,   // HERESY 1397
@@ -12667,11 +12674,12 @@
   if (window.HeresyVersions) window.HeresyVersions.init({
     toast: toast, findTake: findTake, title: songTitle,
     openTake: function (name) { openTake(name); setTab("create"); },
-    form: function () { var p = splitTitle(fullTitle()); return { title: p.name.trim(), version: p.version, style: $("style").value, lyrics: $("lyrics").value, abc: $("abc").value }; },   // HERESY 1614
+    form: function () { var p = splitTitle(fullTitle()); return { title: p.name.trim(), version: p.version, style: $("style").value, exclude_styles: $("excludeStyles") ? $("excludeStyles").value : "", lyrics: $("lyrics").value, abc: $("abc").value }; },   // HERESY 1614
     load: function (v) {
       keepForm("before");                              // HERESY 1596: a version into the form: the form as it was kept first
       setTitleParts(v.title === "Untitled" ? "" : v.title || "", v.version || ""); $("title").dispatchEvent(new Event("input", { bubbles: true }));   // HERESY 1614: its branch too
       setField("style", v.style || "");
+      if ($("excludeStyles")) setField("excludeStyles", v.exclude_styles || "");
       setField("lyrics", v.lyrics || "");
       growLyrics();
       setField("abc", v.abc || "");
@@ -15512,12 +15520,12 @@
   // theme pick broke this dedupe and every keepForm broke the themes' guard (a hover preview rewrote the day or night theme)
   var lastFormPrint = "";
   function formParams() {
-    try { var r = buildRequest(false, false, true); ["title", "style", "lyrics", "abc", "semantic_tokens", "parent"].forEach(function (k) { delete r[k]; }); return r; }
+    try { var r = buildRequest(false, false, true); ["title", "style", "exclude_styles", "lyrics", "abc", "semantic_tokens", "parent"].forEach(function (k) { delete r[k]; }); return r; }
     catch (e) { return {}; }
   }
   function keepForm(why) {
     if (!window.HeresyVersions) return null;
-    var words = { title: songTitle(), style: $("style").value, lyrics: $("lyrics").value, abc: $("abc").value }, params = formParams();
+    var words = { title: songTitle(), style: $("style").value, exclude_styles: $("excludeStyles") ? $("excludeStyles").value : "", lyrics: $("lyrics").value, abc: $("abc").value }, params = formParams();
     if (!(words.style.trim() || words.lyrics.trim() || words.abc.trim())) return null;
     var print = JSON.stringify([words, params]);
     if (print === lastFormPrint) return null;

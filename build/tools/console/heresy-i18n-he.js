@@ -5848,7 +5848,7 @@ RuachI18n.add("he", {
 "{0} cloned: its window holds its own settings": "{0} שוכפל: החלון שלו שומר הגדרות משלו",
 "Delete the clone «{0}»? Its settings go with it.": "למחוק את השכפול \"{0}\"? ההגדרות שלו יימחקו איתו.",
 "Eight clones of one step are enough": "שמונה שכפולים של שלב אחד מספיקים",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "כל לחיצה על \"יצירת שיר\" (Generate) שומרת את הסגנון, המילים והפרטיטורה של הכותרת הזאת בנפרד מהטייקים: הגרסאות שלה, השוואה בין שתיים, אחת בחזרה לטופס",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "כל לחיצה על \"יצירת שיר\" (Generate) שומרת את הסגנון, הסגנונות להחריג, המילים והפרטיטורה של הכותרת הזאת בנפרד מהטייקים: הגרסאות שלה, השוואה בין שתיים, אחת בחזרה לטופס",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "המילים של כל לחיצה על \"יצירת שיר\" (Generate), שמורות תחת הכותרת שלהן בנפרד מהטייקים: טייק שנמחק אף פעם לא לוקח אותן איתו",
 "Musician's versions": "גרסאות המוזיקאי",
 "The Musician's version was not kept: {0}": "גרסת המוזיקאי לא נשמרה: {0}",
@@ -5865,7 +5865,7 @@ RuachI18n.add("he", {
 "Trash ({0})": "פח ({0})",
 "Bring back": "שחזור",
 "deleted from the library; its words are kept here": "נמחק מהספרייה; המילים שלו שמורות כאן",
-"Its title, style, lyrics and score into the Musician's form": "הכותרת, הסגנון, המילים והפרטיטורה שלה אל הטופס של המוזיקאי",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "הכותרת, הסגנון, הסגנונות להחריג, המילים והפרטיטורה שלה אל הטופס של המוזיקאי",
 "★ Starred": "★ מסומן בכוכב",
 "☆ Star": "☆ סימון בכוכב",
 "Label…": "תווית…",
@@ -5881,7 +5881,7 @@ RuachI18n.add("he", {
 "Delete version #{0}?": "למחוק את גרסה #{0}?",
 "It goes into this title's trash, from where it comes back.": "היא עוברת לפח של הכותרת הזאת, ומשם אפשר להחזיר אותה.",
 "Put version #{0} into the Musician's form?": "להכניס את גרסה #{0} לטופס של המוזיקאי?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "הכותרת, הסגנון, המילים והפרטיטורה שנמצאים שם עכשיו יוחלפו. מה שנוצר מהם כבר שמור כאן.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "הכותרת, הסגנון, הסגנונות להחריג, המילים והפרטיטורה שנמצאים שם עכשיו יוחלפו. מה שנוצר מהם כבר שמור כאן.",
 "Version #{0} is in the form": "גרסה #{0} בטופס",
 "No version is kept yet: every Generate keeps its words here": "עדיין לא נשמרה אף גרסה: כל לחיצה על \"יצירת שיר\" (Generate) שומרת כאן את המילים שלה",
 "The Musician's versions": "גרסאות המוזיקאי",
@@ -9184,4 +9184,13 @@ RuachI18n.add("he", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("he", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "ה-VAE שבו מפוענח שיר כשהבקשה שלו לא נוקבת באף אחד (פרומפטים שמורים, לקוחות אחרים). כפתורי ה-VAE בטופס בוחרים אותו לכל שיר, ושיר גמור יכול לקבל אחר מהעמוד שלו."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("he", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles לא שימש הפעם: הנחיה 1.0 משאירה ענף אחד",
+"Exclude styles": "סגנונות להחריג",
+"drones, beats, drums…": "drones, beats, drums…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "מה שהשיר לא צריך להכיל. המעבר הבלתי מותנה של ההנחיה נושא את הסגנונות האלה במקום סגנון ריק, והשיר נדחף מהם. ריק — המעבר נשאר כפי שהיה."
 });

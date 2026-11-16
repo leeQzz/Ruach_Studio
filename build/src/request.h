@@ -52,7 +52,11 @@ struct Yue2Adapter {
 struct Yue2Request {
     // text content
     std::string style;   // ""
-    std::string lyrics;  // ""
+    // What the song must not have. Empty: the unconditional CFG pass is the
+    // instruction alone. Otherwise that pass carries these styles in [Tags]
+    // (lyrics still empty), so guidance pushes away from them.
+    std::string exclude_styles;  // ""
+    std::string lyrics;          // ""
 
     // symbolic plan. Empty in melody or full mode makes the model write one,
     // and the score it produces comes back in the reply so it can be edited

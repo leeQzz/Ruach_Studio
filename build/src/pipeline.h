@@ -1162,11 +1162,20 @@ static bool pipeline_generate(Yue2Pipeline *          p,
         fprintf(stderr, "[Prompt] guidance %.2f for the music, %.2f for the lyrics: a third branch without the lyrics\n", (double) guidance,
                 (double) lyrics_guidance);
     }
+    std::string                   excluded = yue2_style_line(r.exclude_styles);
     std::vector<std::vector<int>> negatives;
     if (guidance != 1.0f || split) {
         negatives.resize(B);
         for (int i = 0; i < B; i++) {
-            negatives[i] = yue2_build_negative_ids(encode, cot, has_score ? &abc_ids[i] : nullptr);
+            negatives[i] = yue2_build_negative_ids(encode, cot, has_score ? &abc_ids[i] : nullptr, excluded);
+        }
+        if (!excluded.empty()) {
+            std::string preview = excluded.size() > 120 ? excluded.substr(0, 117) + "..." : excluded;
+            fprintf(stderr, "[Prompt] unconditional branch carries excluded styles: %s\n", preview.c_str());
+        }
+    } else if (const char * unused = yue2_exclude_unused(r.cfg_scale, r.cfg_lyrics, cot, excluded)) {
+        if (unused[0]) {
+            fprintf(stderr, "[Prompt] %s\n", unused);
         }
     }
 

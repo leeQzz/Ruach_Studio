@@ -34,8 +34,12 @@
   var keeping = Promise.resolve();
   function keep(words, takes, mode, why, params) {
     if (!words || !(String(words.style || "").trim() || String(words.lyrics || "").trim() || String(words.abc || "").trim())) return Promise.resolve(null);
-    var body = { op: "keep", title: words.title, version: words.version || "", style: words.style || "", lyrics: words.lyrics || "", abc: words.abc || "", mode: mode || "", takes: takes || [],
-                 why: why || "generate", params: params || {} };
+    var knobs = params && typeof params === "object" ? Object.assign({}, params) : {};
+    var exclude = String(words.exclude_styles || knobs.exclude_styles || "");   // prompt text, not a knob: an older keep left it only in params
+    delete knobs.exclude_styles;
+    var body = { op: "keep", title: words.title, version: words.version || "", style: words.style || "", lyrics: words.lyrics || "", abc: words.abc || "",
+                 exclude_styles: exclude, mode: mode || "", takes: takes || [],
+                 why: why || "generate", params: knobs };
     var sent = keeping.then(function () { return api(body); });
     keeping = sent.catch(function () { return null; });
     return sent
@@ -127,9 +131,15 @@
     if (n === "form") return formWords();
     return st.book ? (st.book.versions || []).filter(function (v) { return v.n === n; })[0] || null : null;
   }
+  function excluded(v) {
+    if (!v) return "";
+    if (v.exclude_styles) return String(v.exclude_styles);
+    var p = v.params;
+    return p && p.exclude_styles ? String(p.exclude_styles) : "";
+  }
   function formWords() {
     var f = st.hooks && st.hooks.form ? st.hooks.form() : {};
-    return { n: "form", title: f.title || "", version: f.version || "", style: f.style || "", lyrics: f.lyrics || "", abc: f.abc || "", takes: [] };
+    return { n: "form", title: f.title || "", version: f.version || "", style: f.style || "", exclude_styles: f.exclude_styles || "", lyrics: f.lyrics || "", abc: f.abc || "", takes: [] };
   }
   function open(where) {
     where = where || {};
@@ -194,7 +204,7 @@
     }).join("");
     var i = st.book.versions.indexOf(v);
     return '<div class="vr-acts"><strong class="mono" translate="no">' + esc(branchName(v)) + " · #" + v.n + "</strong>" + '<span class="row-hint mono">' + esc(when(v.at)) + (v.mode ? " · " + esc(v.mode) : "") + "</span>" +
-      '<button type="button" class="btn primary small" data-vr="form" data-tip="Its title, style, lyrics and score into the Musician\'s form">Into the form</button>' +
+      '<button type="button" class="btn primary small" data-vr="form" data-tip="Its title, style, excluded styles, lyrics and score into the Musician\'s form">Into the form</button>' +
       '<button type="button" class="btn ghost small" data-vr="star" aria-pressed="' + !!v.star + '">' + (v.star ? "★ Starred" : "☆ Star") + "</button>" +
       '<button type="button" class="btn ghost small" data-vr="label">Label…</button>' +
       '<button type="button" class="btn ghost small" data-vr="lock" aria-pressed="' + !!v.lock + '" data-tip="A locked version cannot be deleted">' + (v.lock ? "Unlock" : "Lock") + "</button>" +
@@ -205,6 +215,7 @@
       (v.label ? '<p class="vr-label-big" translate="no">' + esc(v.label) + "</p>" : "") +
       (v.title && v.title !== st.book.title ? section("Title", '<div class="vr-text" translate="no">' + esc(v.title) + "</div>") : "") +
       section("Style", '<div class="vr-text" translate="no">' + (esc(v.style) || "&nbsp;") + "</div>") +
+      (excluded(v) ? section("Exclude styles", '<div class="vr-text" translate="no">' + esc(excluded(v)) + "</div>") : "") +
       section("Lyrics", '<pre class="vr-text" translate="no">' + esc(v.lyrics) + "</pre>") +
       (v.abc ? section("Score", '<pre class="vr-text mono" translate="no">' + esc(v.abc) + "</pre>") : "") +
       section("Takes", takes || '<p class="row-hint">none landed with these words</p>');
@@ -220,6 +231,7 @@
       '<span class="row-hint">− ' + esc(tr("only in {0}").replace("{0}", name(older))) + " · + " + esc(tr("only in {0}").replace("{0}", name(newer))) + "</span></div>" +
       (older.title !== newer.title ? section("Title", diffWords(older.title, newer.title)) : "") +
       section("Style", diffWords(older.style, newer.style)) +
+      (excluded(older) || excluded(newer) ? section("Exclude styles", diffWords(excluded(older), excluded(newer))) : "") +
       section("Lyrics", diffLines(older.lyrics, newer.lyrics)) +
       (older.abc || newer.abc ? section("Score", diffLines(older.abc, newer.abc)) : "");
   }
@@ -250,14 +262,15 @@
     go.then(function (yes) { if (yes === true) mark("delete", v.n); });
   }
   function intoForm(v) {
-    var f = formWords(), same = f.title === (v.title === "Untitled" ? "" : v.title) && (f.version || "") === (v.version || "") && f.style === v.style && f.lyrics === v.lyrics && f.abc === (v.abc || "");
-    var empty = !f.style.trim() && !f.lyrics.trim() && !f.abc.trim();
+    var f = formWords(), back = excluded(v);
+    var same = f.title === (v.title === "Untitled" ? "" : v.title) && (f.version || "") === (v.version || "") && f.style === v.style && excluded(f) === back && f.lyrics === v.lyrics && f.abc === (v.abc || "");
+    var empty = !f.style.trim() && !f.lyrics.trim() && !f.abc.trim() && !excluded(f).trim();
     var go = same || empty || !window.HeresyDialog ? Promise.resolve(true)
-      : window.HeresyDialog.confirm(tr("Put version #{0} into the Musician's form?").replace("{0}", v.n) + "\n\n" + tr("The title, style, lyrics and score there now are replaced. What was generated from them is kept here already."),
+      : window.HeresyDialog.confirm(tr("Put version #{0} into the Musician's form?").replace("{0}", v.n) + "\n\n" + tr("The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already."),
         { ok: tr("Into the form"), cancel: tr("Cancel") });
     go.then(function (yes) {
       if (yes !== true || !st.hooks || !st.hooks.load) return;
-      st.hooks.load(v);
+      st.hooks.load(Object.assign({}, v, { exclude_styles: back }));
       close();
       say(tr("Version #{0} is in the form").replace("{0}", v.n));
     });

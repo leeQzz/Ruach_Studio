@@ -5942,7 +5942,7 @@ RuachI18n.add("ja", {
 "{0} cloned: its window holds its own settings": "{0} を複製しました：そのウィンドウが独自の設定を保持します",
 "Delete the clone «{0}»? Its settings go with it.": "複製「{0}」を削除しますか？その設定も一緒に消えます。",
 "Eight clones of one step are enough": "1つのステップの複製は8つまでです",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Generate のたびに、このタイトルのスタイル・歌詞・スコアをテイクとは別に保存します：そのバージョン、2つの差分、1つをフォームに戻す",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Generate のたびに、このタイトルのスタイル・除外するスタイル・歌詞・スコアをテイクとは別に保存します：そのバージョン、2つの差分、1つをフォームに戻す",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "各 Generate の言葉を、テイクとは別にタイトルごとに保存：テイクを削除しても言葉は消えません",
 "Musician's versions": "ミュージシャンのバージョン",
 "The Musician's version was not kept: {0}": "ミュージシャンのバージョンを保存できませんでした：{0}",
@@ -5959,7 +5959,7 @@ RuachI18n.add("ja", {
 "Trash ({0})": "ゴミ箱（{0}）",
 "Bring back": "元に戻す",
 "deleted from the library; its words are kept here": "ライブラリから削除済み；言葉はここに保存されています",
-"Its title, style, lyrics and score into the Musician's form": "そのタイトル・スタイル・歌詞・スコアをミュージシャンのフォームへ",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "そのタイトル・スタイル・除外するスタイル・歌詞・スコアをミュージシャンのフォームへ",
 "★ Starred": "★ スター付き",
 "☆ Star": "☆ スター",
 "Label…": "ラベル…",
@@ -5975,7 +5975,7 @@ RuachI18n.add("ja", {
 "Delete version #{0}?": "バージョン #{0} を削除しますか？",
 "It goes into this title's trash, from where it comes back.": "このタイトルのゴミ箱に入り、そこから戻せます。",
 "Put version #{0} into the Musician's form?": "バージョン #{0} をミュージシャンのフォームに入れますか？",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "いまフォームにあるタイトル・スタイル・歌詞・スコアは置き換えられます。そこから生成したものはすでにここに保存されています。",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "いまフォームにあるタイトル・スタイル・除外するスタイル・歌詞・スコアは置き換えられます。そこから生成したものはすでにここに保存されています。",
 "Version #{0} is in the form": "バージョン #{0} をフォームに入れました",
 "No version is kept yet: every Generate keeps its words here": "まだバージョンはありません：Generate のたびに言葉がここに保存されます",
 "The Musician's versions": "ミュージシャンのバージョン",
@@ -9280,4 +9280,13 @@ RuachI18n.add("ja", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("ja", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "曲のリクエストが VAE を指定していないときに、その曲のデコードに使う VAE（保存したプロンプト、他のクライアント）。フォームの VAE ボタンで曲ごとに選べます。完成した曲はそのページから別の VAE に変えられます。"
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("ja", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "今回 exclude_styles は使われません：ガイダンス 1.0 は単一の分岐のままです",
+"Exclude styles": "除外するスタイル",
+"drones, beats, drums…": "ドローン、ビート、ドラム…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "曲にあってはならないもの。ガイダンスの無条件パスが、空のスタイルの代わりにこれらのスタイルを運び、曲はそれらから押し離される。空なら、そのパスはこれまでどおり。"
 });

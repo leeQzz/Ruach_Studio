@@ -6064,7 +6064,7 @@ RuachI18n.add("ru", {
 "{0} cloned: its window holds its own settings": "{0}: клон готов, его окно держит свои настройки",
 "Delete the clone «{0}»? Its settings go with it.": "Удалить клон «{0}»? Его настройки уйдут с ним.",
 "Eight clones of one step are enough": "Восьми клонов одного шага хватит",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Каждый Generate хранит стиль, лирику и партитуру этого названия отдельно от семплов: его версии, разница двух, любая обратно в форму",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Каждый Generate хранит стиль, исключённые стили, лирику и партитуру этого названия отдельно от семплов: его версии, разница двух, любая обратно в форму",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Слова каждого Generate, сохранённые под своим названием отдельно от семплов: удалённый семпл никогда не уносит их с собой",
 "Musician's versions": "Версии Музыканта",
 "The Musician's version was not kept: {0}": "Версия Музыканта не сохранилась: {0}",
@@ -6081,7 +6081,7 @@ RuachI18n.add("ru", {
 "Trash ({0})": "Корзина ({0})",
 "Bring back": "Вернуть",
 "deleted from the library; its words are kept here": "удалён из библиотеки; его слова сохранены здесь",
-"Its title, style, lyrics and score into the Musician's form": "Её название, стиль, лирика и партитура — в форму Музыканта",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Её название, стиль, исключённые стили, лирика и партитура — в форму Музыканта",
 "★ Starred": "★ Со звездой",
 "☆ Star": "☆ Звезда",
 "Label…": "Метка…",
@@ -6097,7 +6097,7 @@ RuachI18n.add("ru", {
 "Delete version #{0}?": "Удалить версию #{0}?",
 "It goes into this title's trash, from where it comes back.": "Она уйдёт в корзину этого названия, откуда возвращается.",
 "Put version #{0} into the Musician's form?": "Поставить версию #{0} в форму Музыканта?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Название, стиль, лирика и партитура, что там сейчас, будут заменены. Всё, что из них уже сгенерировано, здесь уже сохранено.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Название, стиль, исключённые стили, лирика и партитура, что там сейчас, будут заменены. Всё, что из них уже сгенеровано, здесь уже сохранено.",
 "Version #{0} is in the form": "Версия #{0} в форме",
 "No version is kept yet: every Generate keeps its words here": "Пока ни одной версии: каждый Generate хранит здесь свои слова",
 "The Musician's versions": "Версии Музыканта",
@@ -9401,4 +9401,13 @@ RuachI18n.add("ru", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("ru", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "VAE, которым декодируется песня, когда её запрос не называет никакого (сохранённые промпты, другие клиенты). Кнопки VAE в форме выбирают его для каждой песни, а готовой песне можно дать другой с её страницы."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("ru", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles на этот раз не использован: ведение 1.0 оставляет одну ветвь",
+"Exclude styles": "Исключить стили",
+"drones, beats, drums…": "дроны, биты, барабаны…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Чего в песне быть не должно. Безусловный проход ведения несёт эти стили вместо пустого, и песню от них отталкивает. Пусто — этот проход остаётся как был."
 });

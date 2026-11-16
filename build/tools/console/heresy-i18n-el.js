@@ -6056,7 +6056,7 @@ RuachI18n.add("el", {
 "{0} cloned: its window holds its own settings": "{0}: ο κλώνος έγινε, το παράθυρό του κρατά δικές του ρυθμίσεις",
 "Delete the clone «{0}»? Its settings go with it.": "Διαγραφή του κλώνου «{0}»; Οι ρυθμίσεις του φεύγουν μαζί του.",
 "Eight clones of one step are enough": "Οκτώ κλώνοι ενός βήματος φτάνουν",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Κάθε Generate κρατά το στυλ, τους στίχους και την παρτιτούρα αυτού του τίτλου χωριστά από τις λήψεις: οι εκδοχές του, η διαφορά δύο, μία πίσω στη φόρμα",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Κάθε Generate κρατά το στυλ, τα εξαιρούμενα στυλ, τους στίχους και την παρτιτούρα αυτού του τίτλου χωριστά από τις λήψεις: οι εκδοχές του, η διαφορά δύο, μία πίσω στη φόρμα",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Οι λέξεις κάθε Generate, κρατημένες κάτω από τον τίτλο τους χωριστά από τις λήψεις: μια λήψη που σβήνεται δεν τις παίρνει ποτέ μαζί της",
 "Musician's versions": "Εκδοχές του Μουσικού",
 "The Musician's version was not kept: {0}": "Η εκδοχή του Μουσικού δεν κρατήθηκε: {0}",
@@ -6073,7 +6073,7 @@ RuachI18n.add("el", {
 "Trash ({0})": "Κάδος ({0})",
 "Bring back": "Επαναφορά",
 "deleted from the library; its words are kept here": "σβήστηκε από τη βιβλιοθήκη· οι λέξεις της κρατιούνται εδώ",
-"Its title, style, lyrics and score into the Musician's form": "Ο τίτλος, το στυλ, οι στίχοι και η παρτιτούρα της στη φόρμα του Μουσικού",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Ο τίτλος, το στυλ, τα εξαιρούμενα στυλ, οι στίχοι και η παρτιτούρα της στη φόρμα του Μουσικού",
 "★ Starred": "★ Με αστέρι",
 "☆ Star": "☆ Αστέρι",
 "Label…": "Ετικέτα…",
@@ -6089,7 +6089,7 @@ RuachI18n.add("el", {
 "Delete version #{0}?": "Διαγραφή της εκδοχής #{0};",
 "It goes into this title's trash, from where it comes back.": "Πηγαίνει στον κάδο αυτού του τίτλου, από όπου επιστρέφει.",
 "Put version #{0} into the Musician's form?": "Να μπει η εκδοχή #{0} στη φόρμα του Μουσικού;",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Ο τίτλος, το στυλ, οι στίχοι και η παρτιτούρα που είναι εκεί τώρα αντικαθίστανται. Ό,τι βγήκε από αυτά κρατιέται ήδη εδώ.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Ο τίτλος, το στυλ, τα εξαιρούμενα στυλ, οι στίχοι και η παρτιτούρα που είναι εκεί τώρα αντικαθίστανται. Ό,τι βγήκε από αυτά κρατιέται ήδη εδώ.",
 "Version #{0} is in the form": "Η εκδοχή #{0} είναι στη φόρμα",
 "No version is kept yet: every Generate keeps its words here": "Καμία εκδοχή ακόμη: κάθε Generate κρατά εδώ τις λέξεις του",
 "The Musician's versions": "Εκδοχές του Μουσικού",
@@ -9400,4 +9400,13 @@ RuachI18n.add("el", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("el", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "Το VAE με το οποίο αποκωδικοποιείται ένα τραγούδι όταν το αίτημά του δεν ορίζει κανένα (αποθηκευμένα prompts, άλλοι πελάτες). Τα κουμπιά VAE στη φόρμα το επιλέγουν για κάθε τραγούδι, και ένα έτοιμο τραγούδι μπορεί να πάρει άλλο από τη σελίδα του."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("el", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "το exclude_styles δεν χρησιμοποιήθηκε: η καθοδήγηση 1.0 κρατά έναν μόνο κλάδο",
+"Exclude styles": "Εξαίρεση στυλ",
+"drones, beats, drums…": "drones, beats, drums…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Τι δεν πρέπει να έχει το τραγούδι. Το άνευ όρων πέρασμα της καθοδήγησης κουβαλά αυτά τα στυλ αντί για ένα κενό στυλ, και το τραγούδι απομακρύνεται από αυτά. Άδειο, αυτό το πέρασμα μένει όπως ήταν."
 });

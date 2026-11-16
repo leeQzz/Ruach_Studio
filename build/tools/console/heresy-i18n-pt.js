@@ -5940,7 +5940,7 @@ RuachI18n.add("pt", {
 "{0} cloned: its window holds its own settings": "{0} clonado: a janela dele guarda os seus próprios ajustes",
 "Delete the clone «{0}»? Its settings go with it.": "Apagar o clone «{0}»? Os ajustes dele vão junto.",
 "Eight clones of one step are enough": "Oito clones de um passo bastam",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Cada Generate guarda o estilo, a letra e a partitura deste título à parte dos takes: suas versões, a diferença de duas, uma de volta ao formulário",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Cada Generate guarda o estilo, os estilos excluídos, a letra e a partitura deste título à parte dos takes: suas versões, a diferença de duas, uma de volta ao formulário",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "As palavras de cada Generate, guardadas sob o seu título à parte dos takes: um take apagado nunca as leva consigo",
 "Musician's versions": "Versões do Músico",
 "The Musician's version was not kept: {0}": "A versão do Músico não foi guardada: {0}",
@@ -5957,7 +5957,7 @@ RuachI18n.add("pt", {
 "Trash ({0})": "Lixeira ({0})",
 "Bring back": "Trazer de volta",
 "deleted from the library; its words are kept here": "apagado da biblioteca; as suas palavras ficam guardadas aqui",
-"Its title, style, lyrics and score into the Musician's form": "O título, o estilo, a letra e a partitura dela no formulário do Músico",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "O título, o estilo, os estilos excluídos, a letra e a partitura dela no formulário do Músico",
 "★ Starred": "★ Com estrela",
 "☆ Star": "☆ Estrela",
 "Label…": "Rótulo…",
@@ -5973,7 +5973,7 @@ RuachI18n.add("pt", {
 "Delete version #{0}?": "Apagar a versão #{0}?",
 "It goes into this title's trash, from where it comes back.": "Ela vai para a lixeira deste título, de onde volta.",
 "Put version #{0} into the Musician's form?": "Pôr a versão #{0} no formulário do Músico?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "O título, o estilo, a letra e a partitura que estão lá agora são substituídos. O que já foi gerado deles está guardado aqui.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "O título, o estilo, os estilos excluídos, a letra e a partitura que estão lá agora são substituídos. O que já foi gerado deles está guardado aqui.",
 "Version #{0} is in the form": "A versão #{0} está no formulário",
 "No version is kept yet: every Generate keeps its words here": "Nenhuma versão ainda: cada Generate guarda aqui as suas palavras",
 "The Musician's versions": "Versões do Músico",
@@ -9284,4 +9284,13 @@ RuachI18n.add("pt", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("pt", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "O VAE com que uma canção é decodificada quando o pedido dela não nomeia nenhum (prompts salvos, outros clientes). Os botões VAE do formulário o escolhem para cada música, e uma música pronta pode receber outro na página dela."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("pt", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles não foi usado: uma orientação de 1.0 mantém um único ramo",
+"Exclude styles": "Excluir estilos",
+"drones, beats, drums…": "drones, batidas, bateria…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "O que a canção não deve ter. A passagem incondicional da orientação leva estes estilos no lugar de um estilo vazio, e a canção é afastada deles. Vazio, essa passagem fica como está."
 });

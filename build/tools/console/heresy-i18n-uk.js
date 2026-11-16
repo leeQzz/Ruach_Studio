@@ -6059,7 +6059,7 @@ RuachI18n.add("uk", {
 "{0} cloned: its window holds its own settings": "{0}: клон готовий, його вікно тримає свої налаштування",
 "Delete the clone «{0}»? Its settings go with it.": "Видалити клон «{0}»? Його налаштування підуть з ним.",
 "Eight clones of one step are enough": "Восьми клонів одного кроку досить",
-"Every Generate keeps this title's style, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Кожен Generate зберігає стиль, лірику й партитуру цієї назви окремо від семплів: її версії, різниця двох, будь-яка назад у форму",
+"Every Generate keeps this title's style, excluded styles, lyrics and score apart from the takes: its versions, a diff of two, one back into the form": "Кожен Generate зберігає стиль, виключені стилі, лірику й партитуру цієї назви окремо від семплів: її версії, різниця двох, будь-яка назад у форму",
 "Every Generate's words, kept under their title apart from the takes: a take deleted never takes them along": "Слова кожного Generate, збережені під своєю назвою окремо від семплів: видалений семпл ніколи не забирає їх із собою",
 "Musician's versions": "Версії Музиканта",
 "The Musician's version was not kept: {0}": "Версію Музиканта не збережено: {0}",
@@ -6076,7 +6076,7 @@ RuachI18n.add("uk", {
 "Trash ({0})": "Кошик ({0})",
 "Bring back": "Повернути",
 "deleted from the library; its words are kept here": "видалений з бібліотеки; його слова збережено тут",
-"Its title, style, lyrics and score into the Musician's form": "Її назва, стиль, лірика й партитура — у форму Музиканта",
+"Its title, style, excluded styles, lyrics and score into the Musician's form": "Її назва, стиль, виключені стилі, лірика й партитура — у форму Музиканта",
 "★ Starred": "★ Із зіркою",
 "☆ Star": "☆ Зірка",
 "Label…": "Мітка…",
@@ -6092,7 +6092,7 @@ RuachI18n.add("uk", {
 "Delete version #{0}?": "Видалити версію #{0}?",
 "It goes into this title's trash, from where it comes back.": "Вона піде в кошик цієї назви, звідки повертається.",
 "Put version #{0} into the Musician's form?": "Поставити версію #{0} у форму Музиканта?",
-"The title, style, lyrics and score there now are replaced. What was generated from them is kept here already.": "Назва, стиль, лірика й партитура, що там зараз, будуть замінені. Усе, що з них уже згенеровано, тут уже збережено.",
+"The title, style, excluded styles, lyrics and score there now are replaced. What was generated from them is kept here already.": "Назва, стиль, виключені стилі, лірика й партитура, що там зараз, будуть замінені. Усе, що з них уже згенеровано, тут уже збережено.",
 "Version #{0} is in the form": "Версія #{0} у формі",
 "No version is kept yet: every Generate keeps its words here": "Поки жодної версії: кожен Generate зберігає тут свої слова",
 "The Musician's versions": "Версії Музиканта",
@@ -9396,4 +9396,13 @@ RuachI18n.add("uk", {
 // UIX frame lane 13.11.2026 (HERESY 2532): Engine Hardware, the VAE default tip whole
 RuachI18n.add("uk", {
 "The VAE a song is decoded with when its request names none (saved prompts, other clients). The VAE buttons in the form choose per song, and a finished song can get another from its page.": "VAE, яким декодується пісня, коли її запит не називає жодного (збережені промпти, інші клієнти). Кнопки VAE у формі обирають його для кожної пісні, а готовій пісні можна дати інший з її сторінки."
+});
+
+
+// Exclude styles: the guidance's negative condition, the box under Style
+RuachI18n.add("uk", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles цього разу не використано: ведення 1.0 лишає одну гілку",
+"Exclude styles": "Виключити стилі",
+"drones, beats, drums…": "дрони, біти, барабани…",
+"What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Чого в пісні бути не повинно. Безумовний прохід ведення несе ці стилі замість порожнього, і пісню від них відштовхує. Порожньо — цей прохід лишається як був."
 });

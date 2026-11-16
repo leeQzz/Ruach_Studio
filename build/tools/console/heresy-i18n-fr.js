@@ -9273,6 +9273,7 @@ RuachI18n.add("fr", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("fr", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles n'a pas été utilisé : un guidage de 1.0 garde une seule branche",
 "Exclude styles": "Exclure des styles",
 "drones, beats, drums…": "drones, beats, batterie…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Ce que la chanson ne doit pas avoir. La passe inconditionnelle du guidage porte ces styles au lieu d'un style vide, et la chanson est écartée d'eux. Vide, cette passe reste comme elle est."

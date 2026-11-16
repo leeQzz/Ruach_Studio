@@ -187,3 +187,22 @@ static float yue2_default_guidance(Yue2Cot cot) {
     (void) cot;
     return 1.6f;
 }
+
+// Guidance of exactly 1, with no separate lyrics scale, is one branch. The
+// excluded styles would not move a logit, so a caller must say they were not
+// used instead of dropping them quietly. Empty when the exclude is blank, or
+// when a branch will actually carry it.
+static const char * const YUE2_EXCLUDE_UNUSED =
+    "exclude_styles was not used: guidance 1.0 keeps a single branch";
+
+static const char * yue2_exclude_unused(float cfg_scale, float cfg_lyrics, Yue2Cot cot, const std::string & exclude) {
+    if (yue2_style_line(exclude).empty()) {
+        return "";
+    }
+    const float guidance = cfg_scale < 0.0f ? yue2_default_guidance(cot) : cfg_scale;
+    const float lyrics   = cfg_lyrics < 0.0f ? guidance : cfg_lyrics;
+    if (guidance == 1.0f && lyrics == guidance) {
+        return YUE2_EXCLUDE_UNUSED;
+    }
+    return "";
+}

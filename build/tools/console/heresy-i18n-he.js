@@ -9172,6 +9172,7 @@ RuachI18n.add("he", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("he", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles לא שימש הפעם: הנחיה 1.0 משאירה ענף אחד",
 "Exclude styles": "סגנונות להחריג",
 "drones, beats, drums…": "drones, beats, drums…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "מה שהשיר לא צריך להכיל. המעבר הבלתי מותנה של ההנחיה נושא את הסגנונות האלה במקום סגנון ריק, והשיר נדחף מהם. ריק — המעבר נשאר כפי שהיה."

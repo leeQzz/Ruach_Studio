@@ -4,13 +4,13 @@ addresses only, HERESY 1114). One door for a script, a DAW, an agent: the engine
     GET  /api/v1                          what this is, and every route
     GET  /api/v1/openapi.json             the same as OpenAPI 3.1
     GET  /api/v1/health                   the engine, the lab, the cards (the guard's verdict)
-    POST /api/v1/songs                    make a song: {style, lyrics, exclude_styles, title, mode, duration, min_seconds, abc | midi_b64, …} -> {job}
+    POST /api/v1/songs                    make a song: {style, lyrics, exclude_styles, title, mode, duration, min_seconds, abc | midi_b64, debuzz, …} -> {job}
     POST /api/v1/score/from-midi          a MIDI file as a song's score, to see first: {midi_b64, key, ins} -> {abc, key, …}
     GET  /api/v1/jobs/ID                  its state; when done, the takes it made
     POST /api/v1/jobs/ID/cancel
     GET  /api/v1/takes                    ?workspace= &q= &limit= &offset=
     GET  /api/v1/takes/NAME               the take: what it was made with, its marks, its workspaces
-    GET  /api/v1/takes/NAME/audio         -> the WAV (the engine serves it)
+    GET  /api/v1/takes/NAME/audio         -> the WAV (the engine serves it). ?raw=1 is the decoder's peak-whole WAV when debuzz kept one
     POST /api/v1/takes/NAME/marks         {rating, favorite, note}
     POST /api/v1/takes/NAME/reaper        the take as a REAPER project -> where to fetch it
     GET  /api/v1/takes/NAME/artwork       -> its artwork (JPEG, 768 px), when it has one
@@ -38,6 +38,31 @@ ENGINE = f"http://127.0.0.1:{os.environ.get('YUE2CPP_PORT', '7777')}"
 MODES = {"direct": "off", "off": "off", "full": "full", "melody": "melody"}
 INSTRUMENTAL = "[Intro]\n\n[Verse]\n\n[Outro]\n"
 EXCLUDE_MAX = 8000
+# The engine's own default (prompt.h). Guidance of exactly 1 with no separate lyrics scale is one branch:
+# an exclude would not move a logit, and the answer says so instead of dropping it quietly.
+DEFAULT_GUIDANCE = 1.6
+EXCLUDE_UNUSED = "exclude_styles was not used: guidance 1.0 keeps a single branch"
+
+
+def _guidance(value, fallback):
+    if value is None or value == "":
+        return fallback
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return fallback if number < 0 else number
+
+
+def _exclude_unused(data, exclude):
+    """The sentence to report when this request's exclude cannot ride a CFG branch. Empty when it can, or when none was asked."""
+    if not exclude:
+        return ""
+    guidance = _guidance(data.get("cfg_scale"), DEFAULT_GUIDANCE)
+    lyrics = _guidance(data.get("cfg_lyrics"), guidance)
+    if guidance == 1.0 and lyrics == guidance:
+        return EXCLUDE_UNUSED
+    return ""
 
 
 def _style_line(text):
@@ -162,7 +187,8 @@ def openapi():
     s, i, b, a = {"type": "string"}, {"type": "integer"}, {"type": "boolean"}, {"type": "array"}
     song = {"style": s, "lyrics": s, "exclude_styles": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
             "instrumental": b, "duration": {"type": "number"}, "min_seconds": {"type": "number"}, "music_seed": i, "sound_seed": i, "abc": s, "loras": a,
-            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]}}
+            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]},
+            "cfg_scale": {"type": "number"}, "cfg_lyrics": {"type": "number"}, "debuzz": b}
     return {"openapi": "3.1.0",
             "info": {"title": "Ruach Studio API", "version": VERSION,
                      "description": "Songs from words on this machine. Private networks only; a token when RUACH_API_TOKEN is set."},
@@ -170,7 +196,11 @@ def openapi():
             "paths": {
                 "/health": {"get": op("The engine, the lab and the cards")},
                 "/songs": {"post": op("Make a song; returns the job. A score (abc, or a MIDI file as midi_b64) makes mode melody "
-                                      "or full by itself; direct with a score is refused, as it would drop it", song)},
+                                      "or full by itself; direct with a score is refused, as it would drop it. "
+                                      "exclude_styles rides the unconditional pass; guidance 1.0 with no separate lyrics scale "
+                                      "answers exclude_warning instead of using it. "
+                                      "debuzz (default true) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the "
+                                      "decoder's peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it", song)},
                 "/score/from-midi": {"post": op("A MIDI file as a song's score, without making the song: the score and what "
                                                 "it was made of (the key and where it came from, the notes kept and dropped)",
                                                 {"midi_b64": s, "key": s, "ins": {"type": "string", "enum": ["auto", "keep", "none"]}})},
@@ -179,7 +209,8 @@ def openapi():
                 "/takes": {"get": op("The takes", params=[("workspace", "query", "string"), ("q", "query", "string"),
                                                          ("limit", "query", "integer"), ("offset", "query", "integer")])},
                 "/takes/{name}": {"get": op("One take: what it was made with, its marks", params=[("name", "path", "string")])},
-                "/takes/{name}/audio": {"get": op("The take's WAV (a redirect to the engine)", params=[("name", "path", "string")])},
+                "/takes/{name}/audio": {"get": op("The take's WAV (a redirect to the engine). ?raw=1 is the decoder's peak-whole file when debuzz kept one",
+                                                 params=[("name", "path", "string"), ("raw", "query", "string")])},
                 "/takes/{name}/marks": {"post": op("Like (1), dislike (-1), none (0); favourite; a note",
                                                    {"rating": i, "favorite": b, "note": s}, [("name", "path", "string")])},
                 "/takes/{name}/reaper": {"post": op("The take as a REAPER project", {"midi_b64": s}, [("name", "path", "string")])},
@@ -270,6 +301,7 @@ def handle(method, path, query, body, headers, ctx):
                "duration": float(duration)}
         if exclude:                                  # the unconditional CFG pass; empty leaves the instruction alone
             req["exclude_styles"] = exclude
+        notice = _exclude_unused(data, exclude)      # guidance 1.0, no lyrics split: said here, still forwarded so the engine says it too
         for k_in, k_out in (("music_seed", "lm_seed"), ("sound_seed", "seed")):
             if data.get(k_in) is not None:
                 req[k_out] = int(data[k_in])
@@ -278,9 +310,13 @@ def handle(method, path, query, body, headers, ctx):
         if data.get("min_seconds") is not None:
             req["semantic_sampling"] = {"min_tokens": int(max(0.0, min(float(data["min_seconds"]), float(duration))) * 25)}
         req["output_format"] = str(data.get("output_format") or "wav24")   # lossless, as the page asks: the Refiner and the exports want it
-        for k in ("abc", "loras", "vae", "steps", "solver", "cfg_scale"):
+        for k in ("abc", "loras", "vae", "steps", "solver", "cfg_scale", "cfg_lyrics"):
             if data.get(k) is not None:
                 req[k] = data[k]
+        # debuzz defaults on, beside exclude_styles: a WAV take is cleaned, and audio.raw.wav keeps the decoder's peak-whole file.
+        if "debuzz" in data and not isinstance(data["debuzz"], bool):
+            return 400, {"error": "debuzz is true or false"}
+        req["debuzz"] = data["debuzz"] if "debuzz" in data else True
         if data.get("workspace"):                        # HERESY 2284: a workspace the takes could not go into is refused before the job, not after it
             try:
                 col = ctx["collection"]
@@ -293,6 +329,9 @@ def handle(method, path, query, body, headers, ctx):
         if data.get("workspace") and jid is not None:
             _file_in_workspace(jid, str(data["workspace"]), ctx)
         out = {"job": jid, "poll": f"/api/v1/jobs/{jid}", "mode": asked or "direct", "duration": float(duration)}
+        if notice:
+            out["exclude_unused"] = True
+            out["exclude_warning"] = notice
         if score:
             out["score"] = score                         # where its key came from, the notes kept and dropped
         return 202, out
@@ -326,14 +365,15 @@ def handle(method, path, query, body, headers, ctx):
         if method == "GET" and not what:
             row = next((r for r in col.catalog(outputs, cfg())["takes"] if r["name"] == name), {})
             req = json.load(open(d / "request.json", encoding="utf-8")) if (d / "request.json").is_file() else {}
-            made = {k: req.get(k) for k in ("style", "lyrics", "abc", "cot", "duration", "lm_seed", "seed", "loras", "vae", "steps", "solver")}
+            made = {k: req.get(k) for k in ("style", "lyrics", "abc", "cot", "duration", "lm_seed", "seed", "loras", "vae", "steps", "solver", "debuzz")}
             if req.get("exclude_styles"):               # an older take has no such field
                 made["exclude_styles"] = req["exclude_styles"]
             art = ctx["art"]["info"](name) if ctx.get("art") else None
             return 200, dict(_row(row), request=made, audio=f"/api/v1/takes/{name}/audio",
                              artwork=f"/api/v1/takes/{name}/artwork" if art else None)
         if method == "GET" and what == "audio":
-            raise Redirect("/library/audio?name=" + urllib.parse.quote(name))
+            raw = "&raw=1" if str(query.get("raw") or "") in ("1", "true") else ""
+            raise Redirect("/library/audio?name=" + urllib.parse.quote(name) + raw)
         if method == "POST" and what == "marks":
             if "rating" in data:
                 col.collection_post(cfg(), outputs, {"op": "rate", "names": [name], "value": int(data["rating"])})

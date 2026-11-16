@@ -147,6 +147,14 @@ int main() {
     check(request_parse_json(&spaces, "{\"exclude_styles\":\"  \\n  \"}") && spaces.exclude_styles.empty(), "a whitespace exclude is empty",
           "«" + spaces.exclude_styles + "»");
 
+    check(std::string(yue2_exclude_unused(1.0f, -1.0f, YUE2_COT_FULL, "drones")) == YUE2_EXCLUDE_UNUSED,
+          "guidance 1 with no lyrics split reports that the exclude was not used", "");
+    check(yue2_exclude_unused(1.6f, -1.0f, YUE2_COT_FULL, "drones")[0] == '\0', "guidance 1.6 still carries an exclude", "");
+    check(yue2_exclude_unused(-1.0f, -1.0f, YUE2_COT_FULL, "drones")[0] == '\0', "an unset guidance is 1.6 and carries an exclude", "");
+    check(yue2_exclude_unused(1.0f, 2.2f, YUE2_COT_FULL, "drones")[0] == '\0', "a lyrics split still carries an exclude at guidance 1", "");
+    check(yue2_exclude_unused(1.0f, 1.0f, YUE2_COT_OFF, "drones")[0] != '\0', "lyrics guidance equal to 1 is still a single branch", "");
+    check(yue2_exclude_unused(1.0f, -1.0f, YUE2_COT_FULL, "  \n  ")[0] == '\0', "a blank exclude is not reported unused", "");
+
     printf("%s\n", g_failed ? "FAILED" : "all cases hold");
     return g_failed ? 1 : 0;
 }

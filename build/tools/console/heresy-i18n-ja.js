@@ -9268,6 +9268,7 @@ RuachI18n.add("ja", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("ja", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "今回 exclude_styles は使われません：ガイダンス 1.0 は単一の分岐のままです",
 "Exclude styles": "除外するスタイル",
 "drones, beats, drums…": "ドローン、ビート、ドラム…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "曲にあってはならないもの。ガイダンスの無条件パスが、空のスタイルの代わりにこれらのスタイルを運び、曲はそれらから押し離される。空なら、そのパスはこれまでどおり。"

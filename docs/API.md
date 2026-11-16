@@ -18,7 +18,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | POST | `/api/v1/jobs/ID/cancel` | stop it |
 | GET | `/api/v1/takes` | the takes, newest first: `?workspace=` `?q=` (title or note) `?limit=` `?offset=` |
 | GET | `/api/v1/takes/NAME` | one take: its marks, workspaces, and what it was made with (style, lyrics, score, seeds, adapters) |
-| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves) |
+| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves). `?raw=1` is the decoder's peak-whole WAV when debuzz kept one (`audio.raw.wav`); 404 when the take has none |
 | POST | `/api/v1/takes/NAME/marks` | `{rating: 1 / -1 / 0, favorite: true/false, note: "…"}` |
 | POST | `/api/v1/takes/NAME/reaper` | the take as a REAPER project (see the guide's DAW tab); answers where to fetch the ZIP |
 | GET | `/api/v1/takes/NAME/artwork` | its artwork (a redirect to the JPEG, 768 px), 404 until it has one |
@@ -48,13 +48,14 @@ POST /api/v1/songs
 ```
 
 - `mode`: `direct` (fastest), `full` (a score first: melody and chords, then the song), `melody`. With a score of your own (`abc`, or a MIDI file) and no mode, the score's kind picks it: `full` when it has chord symbols, `melody` when not. `direct` with a score is refused (`400`): direct makes the music without one, and the score would be dropped.
-- `exclude_styles`: what the song must not have (`drones, beats, drums`). The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Left out or empty, that pass stays the instruction alone. Lines are joined into one, as in the Creator. Longer than 8000 characters is refused.
+- `exclude_styles`: what the song must not have (`drones, beats, drums`). The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Left out or empty, that pass stays the instruction alone. Lines are joined into one, as in the Creator. Longer than 8000 characters is refused. Guidance of exactly `1.0`, with `cfg_lyrics` left out or equal to that same `1.0`, is a single branch: the exclusion would not move a logit. The song is still made, and the answer says `exclude_unused: true` with `exclude_warning` (`exclude_styles was not used: guidance 1.0 keeps a single branch`). The job status repeats that sentence. Any other guidance, or a lyrics scale of its own, uses the exclusion.
 - `instrumental: true` makes it without a voice (the lyrics are then left out).
 - `music_seed`, `sound_seed`: to make a take again; left out, both are random.
 - `abc`: your own score, in YuE2's two-voice dialect (what the Creator's score drawer holds).
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
-- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
+- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `cfg_lyrics`, `output_format` (WAV 24-bit unless asked otherwise).
+- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is. A WAV32 (float) keeps the level the cure left, including a peak above full scale; 16- and 24-bit come down to 0.999 only when a peak would not fit. With no library (`--outputs` unset) the job's WAV is still cleaned, and there is no raw file beside it. Cancelling the job stops the cure. Anything other than `true` or `false` is `400`. `exclude_styles` and `debuzz` are both kept: one does not replace the other.
 - `workspace`: the take lands there when it is done.
 
 ### A melody as a MIDI file

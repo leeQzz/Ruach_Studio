@@ -216,7 +216,7 @@ Viktor's screenshots of SUNO's newest interface, 09.10.2026 (its Studio, a DAW, 
 
 **2.1.0, weighty:**
 
-- ✅ **Exclude styles**: what the song must not have (SUNO's «drones, beats, drums…») is the guidance's negative condition. The unconditional CFG pass carries those styles in the [Tags] slot (lyrics still empty); a blank field leaves that pass as the instruction alone, as before. The Creator's box sits under Style; `/api/v1/songs` and the MCP tool forward `exclude_styles`.
+- ✅ **Exclude styles**: what the song must not have (SUNO's «drones, beats, drums…») is the guidance's negative condition. The unconditional CFG pass carries those styles in the [Tags] slot (lyrics still empty); a blank field leaves that pass as the instruction alone, as before. Guidance of exactly 1.0 with no separate lyrics scale is a single branch, so the exclusion would not move a logit: the run still goes, and the answer says `exclude_warning` instead of dropping it quietly. The Creator's box sits under Style; `/api/v1/songs` and the MCP tool forward `exclude_styles` beside `debuzz`.
 - ☐ **The Song Editor**: the take on a timeline of its score's sections; replace a section (its words or its music), extend, remove; saved as a new take.
 - ☐ **Simple and Advanced** in the Creator: three knobs for a newcomer (SUNO's Weirdness, Style Influence, Variety) mapped onto our sampling, the whole form behind Advanced.
 - ☐ **Speech** and **Sounds** beside Songs: a script with its tone and a background on or off (our Speech profile behind it); short samples, one-shots and loops with BPM and key.

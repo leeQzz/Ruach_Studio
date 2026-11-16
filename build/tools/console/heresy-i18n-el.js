@@ -9388,6 +9388,7 @@ RuachI18n.add("el", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("el", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "το exclude_styles δεν χρησιμοποιήθηκε: η καθοδήγηση 1.0 κρατά έναν μόνο κλάδο",
 "Exclude styles": "Εξαίρεση στυλ",
 "drones, beats, drums…": "drones, beats, drums…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Τι δεν πρέπει να έχει το τραγούδι. Το άνευ όρων πέρασμα της καθοδήγησης κουβαλά αυτά τα στυλ αντί για ένα κενό στυλ, και το τραγούδι απομακρύνεται από αυτά. Άδειο, αυτό το πέρασμα μένει όπως ήταν."

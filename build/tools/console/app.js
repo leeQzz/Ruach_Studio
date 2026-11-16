@@ -3188,6 +3188,7 @@
         .then(function () { return post("/synth", sent); });
     }).then(function (data) {
       var job = registerJob(data.id, meta, body);
+      if (data && data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
       paintAllRuns();
       return job;
     });
@@ -3254,6 +3255,7 @@
 
   function applyStatus(job, data) {
     var status = data.status;
+    if (data.exclude_warning) toastOnce(job.id + ":exclude", tr(data.exclude_warning), "warn");
     // Synth jobs report the seeds the server resolved, from the moment they are queued.
     if (data.lm_seed !== undefined && data.lm_seed !== null) {
       STATE.statusKnowsQueue = true;

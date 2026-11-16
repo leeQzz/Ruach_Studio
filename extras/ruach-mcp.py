@@ -43,10 +43,14 @@ def call(path, body=None, timeout=60):
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
                   sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
-                  exclude_styles: str = "") -> dict:
+                  exclude_styles: str = "", debuzz: bool = True) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
     exclude_styles: what the song must not have (drones, beats, drums). The guidance's unconditional pass carries
-    these instead of an empty style. Empty leaves that pass as it is. lyrics: with section tags on their own lines
+    these instead of an empty style. Empty leaves that pass as it is. When guidance is 1.0 and there is no separate
+    lyrics scale, the answer's exclude_warning says this run did not use the exclusion.
+    debuzz: true (the default) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the decoder's
+    peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it.
+    lyrics: with section tags on their own lines
     ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
     480; 0: 180, or the MIDI file's own length). instrumental: no voice. workspace: the Librarian's workspace it lands
@@ -55,7 +59,8 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     dropped). midi_key: the key to write it in (Em, Bb…) when the file has none and the studio's guess would not do.
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
     job_status."""
-    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental}
+    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental,
+            "debuzz": bool(debuzz)}
     if str(exclude_styles or "").strip():
         body["exclude_styles"] = str(exclude_styles).strip()
     if mode:
@@ -76,6 +81,7 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     job = call("/songs", body)
     if not wait or "job" not in job:
         return job
+    notice = job.get("exclude_warning")
     score = job.get("score")
     t0 = time.time()
     while time.time() - t0 < 1800:
@@ -87,6 +93,9 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
                 st["listen"] = URL + "/api/v1/takes/" + st["takes"][0] + "/audio"
             if score:
                 st["score"] = score
+            if notice and not st.get("exclude_warning"):
+                st["exclude_warning"] = notice
+                st["exclude_unused"] = True
             return st
     return {"job": job["job"], "status": "still running after 30 minutes: ask job_status"}
 

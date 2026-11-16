@@ -9384,6 +9384,7 @@ RuachI18n.add("uk", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("uk", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles цього разу не використано: ведення 1.0 лишає одну гілку",
 "Exclude styles": "Виключити стилі",
 "drones, beats, drums…": "дрони, біти, барабани…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "Чого в пісні бути не повинно. Безумовний прохід ведення несе ці стилі замість порожнього, і пісню від них відштовхує. Порожньо — цей прохід лишається як був."

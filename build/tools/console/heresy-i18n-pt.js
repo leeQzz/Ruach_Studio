@@ -9272,6 +9272,7 @@ RuachI18n.add("pt", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("pt", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "exclude_styles não foi usado: uma orientação de 1.0 mantém um único ramo",
 "Exclude styles": "Excluir estilos",
 "drones, beats, drums…": "drones, batidas, bateria…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "O que a canção não deve ter. A passagem incondicional da orientação leva estes estilos no lugar de um estilo vazio, e a canção é afastada deles. Vazio, essa passagem fica como está."

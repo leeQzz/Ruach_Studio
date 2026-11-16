@@ -9268,6 +9268,7 @@ RuachI18n.add("zh", {
 
 // Exclude styles: the guidance's negative condition, the box under Style
 RuachI18n.add("zh", {
+"exclude_styles was not used: guidance 1.0 keeps a single branch": "本次未使用 exclude_styles：引导为 1.0 时只有一条分支",
 "Exclude styles": "排除风格",
 "drones, beats, drums…": "持续音、节拍、鼓…",
 "What the song must not have. The guidance's unconditional pass carries these styles instead of an empty style, so the song is pushed away from them. Empty leaves that pass as it is.": "这首歌不该有的东西。引导的无条件分支带着这些风格，而不是空风格，从而把歌曲从它们推开。留空则该分支保持原样。"

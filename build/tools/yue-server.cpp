@@ -208,6 +208,7 @@ struct Job {
     std::atomic<bool>        started{ false };  // false while it waits in the queue
     int                      made         = 0;      // HERESY 2011 (P2): the tracks it made, beside takes (those of them in the library)
     std::string              score_warning;         // HERESY 2433: a song of it sung by a score without a key line (said, not refused)
+    std::string              exclude_warning;       // exclude_styles asked while guidance 1.0 keeps a single branch: said, not refused
     double                   window_held  = 0.0;    // HERESY 2509: a song of it held whole to one window of the sound half (its seconds)
     std::string              library_error;         // HERESY 2132: the first track the library could not keep, and why (the job is done all the same)
     bool                     result_freed = false;  // its result_body let go, its takes in the library (under mtx_results)
@@ -1522,6 +1523,9 @@ static std::string job_status_json(const Job & job) {
     yyjson_mut_doc_set_root(doc, root);
     yyjson_mut_obj_add_str(doc, root, "status",
                            status == JobStatus::RUNNING && !job.started.load() ? "queued" : job_status_str(status));
+    if (!job.exclude_warning.empty()) {   // said from the first poll: this run does not use the exclusion
+        yyjson_mut_obj_add_strncpy(doc, root, "exclude_warning", job.exclude_warning.c_str(), job.exclude_warning.size());
+    }
     if (job.lm_seed >= 0) {
         yyjson_mut_obj_add_sint(doc, root, "lm_seed", job.lm_seed);
         yyjson_mut_obj_add_sint(doc, root, "seed", job.seed);
@@ -3224,8 +3228,30 @@ int main(int argc, char ** argv) {
         auto job     = job_create();
         job->lm_seed = request.lm_seed;
         job->seed    = request.seed;
+        Yue2Cot      cot_mode;
+        const char * unused = "";
+        if (yue2_cot_parse(request.cot, &cot_mode)) {
+            unused = yue2_exclude_unused(request.cfg_scale, request.cfg_lyrics, cot_mode, request.exclude_styles);
+        }
+        if (unused[0]) {
+            job->exclude_warning = unused;
+        }
         work_push([job, request] { run_job(job, request); });
-        res.set_content(json_string("id", job->id), "application/json");
+        if (!unused[0]) {
+            res.set_content(json_string("id", job->id), "application/json");
+        } else {
+            yyjson_mut_doc * doc  = yyjson_mut_doc_new(NULL);
+            yyjson_mut_val * root = yyjson_mut_obj(doc);
+            yyjson_mut_doc_set_root(doc, root);
+            yyjson_mut_obj_add_strncpy(doc, root, "id", job->id.c_str(), job->id.size());
+            yyjson_mut_obj_add_strncpy(doc, root, "exclude_warning", unused, strlen(unused));
+            char * json = yyjson_mut_write(doc, 0, NULL);
+            res.set_content(json ? json : "{}", "application/json");
+            if (json) {
+                free(json);
+            }
+            yyjson_mut_doc_free(doc);
+        }
     });
 
     // POST /transcribe, multipart/form-data: an "audio" part (WAV or MP3)

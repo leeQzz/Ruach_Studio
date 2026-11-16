@@ -128,7 +128,7 @@ def datasets(kit):
             prepared.append({"name": d.name, "tracks": len(tracks), "from": m.get("from"), "made": m.get("made"),
                              "seconds": round(sum(t.get("seconds") or 0 for t in tracks)),
                              "sheets_by": own_tx,
-                             "scores": score_counts(d, tracks, own_tx or NEW_SET_TRANSCRIBER)})   # full and melody: on the set, transcribed, missing, refused
+                             "scores": scores_by_transcriber(d, tracks)})   # each transcriber: the page follows the one chosen now
     # HERESY 1086: what the Studio's own trainer needs, each said by name (heresy/fetch-heresy.sh --trainer fetches it)
     own = {q: (P["models"] / "checkpoints" / f).is_file() for q, f in OWN_CKPT.items()}
     own.update(mert=(studio_paths.at(studio_paths.MISC, kit) / "MERT-v2-FullSong" / "model.safetensors").is_file(),
@@ -159,7 +159,15 @@ def _trainer_prompt():
     return _PROMPT
 
 
-def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
+def _cache_names(set_dir):
+    cache = Path(set_dir) / "_ruach_cache"
+    try:
+        return {p.name for p in cache.iterdir() if p.is_file()}
+    except OSError:
+        return set()
+
+
+def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None, names=None):
     """Which tracks of a prepared set can teach full or melody: a score kept on the track, a transcribed sheet, a refusal, or nothing yet."""
     P = _trainer_prompt()
     if cot not in ("full", "melody"):
@@ -169,10 +177,8 @@ def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
     set_dir = Path(set_dir)
     if tracks is None:
         tracks = json.loads((set_dir / "dataset.json").read_text(encoding="utf-8")).get("tracks") or []
-    names = set()
-    cache = set_dir / "_ruach_cache"
-    if cache.is_dir():
-        names = {p.name for p in cache.iterdir() if p.is_file()}
+    if names is None:
+        names = _cache_names(set_dir)
     sheets, fails = set(), set()
     for t in tracks:
         stem = str(t.get("stem"))
@@ -184,7 +190,7 @@ def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
     return P.score_coverage(tracks, cot, sheets, fails)
 
 
-def stem_score_gaps(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
+def stem_score_gaps(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None, names=None):
     """Tracks whose voice or band sheet is still to be written. A score on the mix does not cover either stem."""
     P = _trainer_prompt()
     if cot not in ("full", "melody"):
@@ -192,19 +198,31 @@ def stem_score_gaps(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
     set_dir = Path(set_dir)
     if tracks is None:
         tracks = json.loads((set_dir / "dataset.json").read_text(encoding="utf-8")).get("tracks") or []
-    cache = set_dir / "_ruach_cache"
-    names = {p.name for p in cache.iterdir() if p.is_file()} if cache.is_dir() else set()
+    if names is None:
+        names = _cache_names(set_dir)
     return P.stem_scores_missing(tracks, cot, names, transcriber)
 
 
-def score_counts(set_dir, tracks, transcriber):
-    """Counts only: datasets() is polled, and a set's stem list does not belong in every answer."""
+def score_counts(set_dir, tracks, transcriber, names=None):
+    """Counts only: datasets() is polled, and a set's stem list does not belong in every answer.
+
+    stem_missing is how many tracks still need a voice or band sheet for this transcriber. The mix's score does not cover them.
+    """
+    if names is None:
+        names = _cache_names(set_dir)
     out = {}
     for cot in ("full", "melody"):
-        rep = score_report(set_dir, cot, transcriber, tracks)
+        rep = score_report(set_dir, cot, transcriber, tracks, names)
         out[cot] = {"metadata": rep["metadata"], "transcribed": rep["transcribed"],
-                    "missing": len(rep["missing"]), "refused": len(rep["refused"])}
+                    "missing": len(rep["missing"]), "refused": len(rep["refused"]),
+                    "stem_missing": len(stem_score_gaps(set_dir, cot, transcriber, tracks, names))}
     return out
+
+
+def scores_by_transcriber(set_dir, tracks):
+    """Counts for every transcriber. The page follows the one chosen now; another suffix is not this one's sheet."""
+    names = _cache_names(set_dir)
+    return {tx: score_counts(set_dir, tracks, tx, names) for tx in TRANSCRIBERS}
 
 
 def set_transcriber(set_dir):

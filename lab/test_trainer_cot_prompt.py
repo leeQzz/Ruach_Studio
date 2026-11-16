@@ -175,9 +175,18 @@ cache.mkdir(parents=True)
 disk = training.score_report(set_dir, "full", "sheetsage2-bf16")
 check("the set's report: one kept score, one sheet, one refusal, one missing",
       disk["metadata"] == 1 and disk["transcribed"] == 1 and disk["refused"] == ["003"] and disk["missing"] == ["004"], disk)
-counts = training.score_counts(set_dir, json.loads((set_dir / "dataset.json").read_text())["tracks"], "sheetsage2-bf16")
+disk_tracks = json.loads((set_dir / "dataset.json").read_text())["tracks"]
+counts = training.score_counts(set_dir, disk_tracks, "sheetsage2-bf16")
 check("the datasets answer counts them and does not list the stems",
-      counts["full"] == {"metadata": 1, "transcribed": 1, "missing": 1, "refused": 1} and "004" not in json.dumps(counts["full"]), counts)
+      counts["full"] == {"metadata": 1, "transcribed": 1, "missing": 1, "refused": 1, "stem_missing": 4}
+      and "004" not in json.dumps(counts["full"]), counts)
+by_tx = training.scores_by_transcriber(set_dir, disk_tracks)
+check("coverage follows the transcriber: a bf16 sheet is not a Refined sheet",
+      set(by_tx) == set(training.TRANSCRIBERS)
+      and by_tx["sheetsage2-bf16"]["full"]["transcribed"] == 1
+      and by_tx["refined"]["full"]["transcribed"] == 0 and by_tx["refined"]["full"]["metadata"] == 1
+      and by_tx["refined"]["full"]["missing"] == 3 and by_tx["sheetsage2"]["full"]["missing"] == 3
+      and by_tx["refined"]["full"]["stem_missing"] == 4, by_tx["refined"]["full"])
 
 raw = root / "raw"
 raw.mkdir()

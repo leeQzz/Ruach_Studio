@@ -964,21 +964,36 @@
     }
     scoreSay();
   }
-  function scoreSay() {
-    var el = $("trScoreSay");
-    if (!el) return;
-    var cot = $("tr_cot") && $("tr_cot").value;
+  function chosenTranscriber() {
+    var el = $("tr_transcriber");
+    return el && el.value ? el.value : "sheetsage2-bf16";
+  }
+  function scoreNow(cot) {
     var set = ((state.data && state.data.prepared) || []).filter(function (p) { return p.name === state.set; })[0];
-    var s = set && set.scores && cot && set.scores[cot];
-    if (!s || cot === "off") { el.hidden = true; el.textContent = ""; return; }
-    var mode = cot === "full" ? "Full" : "Melody";
+    var table = set && set.scores, tx = chosenTranscriber();
+    if (!table || !cot || cot === "off" || !table[tx]) return null;
+    return table[tx][cot] || null;
+  }
+  function scoreLine(s, sep) {
+    if (!s) return "";
+    if (!s.metadata && !s.transcribed && !s.missing && s.refused) return tr("This set has no score left: the run is refused.");
     var bits = [];
     if (s.metadata) bits.push(tr("{0} with a score on the set").replace("{0}", s.metadata));
     if (s.transcribed) bits.push(tr("{0} transcribed").replace("{0}", s.transcribed));
     if (s.missing) bits.push(tr("{0} still to transcribe").replace("{0}", s.missing));
     if (s.refused) bits.push(tr("{0} refused, those train Direct").replace("{0}", s.refused));
+    if (sep && s.stem_missing) bits.push(tr("{0} whose voice or band is still to transcribe").replace("{0}", s.stem_missing));
+    return (bits.join(", ") || tr("no tracks")) + ".";
+  }
+  function scoreSay() {
+    var el = $("trScoreSay");
+    if (!el) return;
+    var cot = $("tr_cot") && $("tr_cot").value;
+    var s = scoreNow(cot);
+    if (!s) { el.hidden = true; el.textContent = ""; return; }
+    var mode = cot === "full" ? "Full" : "Melody";
     el.hidden = false;
-    el.textContent = mode + ": " + (bits.join(", ") || tr("no tracks")) + ".";
+    el.textContent = mode + ": " + scoreLine(s, $("tr_sep") && $("tr_sep").checked);
   }
   function setKind(k) {
     state.kind = k;
@@ -1149,11 +1164,8 @@
         (guard ? "\n\n" + tr("The meter and the guard: {0}.").replace("{0}", guard) : "") +
         (baseSaid ? "\n\n" + tr("On the base {0}.").replace("{0}", baseSaid) : "") +
         (spec.cot && spec.cot !== "off" ? "\n\n" + tr("Mode {0}: the music half learns to write the score first, the same prompt a song in that mode uses. A track with no score is transcribed before the run; one whose score was refused trains Direct.").replace("{0}", spec.cot === "full" ? "Full" : "Melody") + (function () {
-          var set = ((state.data && state.data.prepared) || []).filter(function (p) { return p.name === spec.dataset; })[0];
-          var s = set && set.scores && set.scores[spec.cot];
-          if (!s) return "";
-          if (!s.metadata && !s.transcribed && !s.missing && s.refused) return "\n" + tr("This set has no score left: the run would teach Direct only.");
-          return "\n" + [s.metadata && tr("{0} with a score on the set").replace("{0}", s.metadata), s.transcribed && tr("{0} transcribed").replace("{0}", s.transcribed), s.missing && tr("{0} still to transcribe").replace("{0}", s.missing), s.refused && tr("{0} refused, those train Direct").replace("{0}", s.refused)].filter(Boolean).join(", ") + ".";
+          var s = scoreNow(spec.cot);
+          return s ? "\n" + scoreLine(s, spec.do_separation) : "";
         })() : ""), { ok: "Start training" });   // HERESY 2321   // HERESY 1752   // HERESY 1631   // 1166: "Train" is the step's name
     }).then(function (ok) {
       if (!ok) return;
@@ -1424,6 +1436,8 @@
     $("trKinds").addEventListener("click", function (e) { var b = e.target.closest("[data-kind]"); if (b) setKind(b.dataset.kind); });
     $("tr_quant").addEventListener("change", function () { if (state.data) { warn(); gate(); paintPills(); } });
     $("tr_cot").addEventListener("change", engineKnobs);   // HERESY 2359: the transcriber only where sheets are written
+    if ($("tr_transcriber")) $("tr_transcriber").addEventListener("change", scoreSay);   // the counts are that transcriber's sheets, not the set's own
+    if ($("tr_sep")) $("tr_sep").addEventListener("change", scoreSay);   // the voice and the band are a gap only while separation is on
     $("tr_engine").addEventListener("change", function () {
       $("tr_quant").value = "bf16";                       // Viktor: nothing quantized in our trainer; HERESY 2321: a plugin's trainer says its own
       keep("yue2.trEngine", this.value);

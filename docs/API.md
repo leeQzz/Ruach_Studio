@@ -18,7 +18,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | POST | `/api/v1/jobs/ID/cancel` | stop it |
 | GET | `/api/v1/takes` | the takes, newest first: `?workspace=` `?q=` (title or note) `?limit=` `?offset=` |
 | GET | `/api/v1/takes/NAME` | one take: its marks, workspaces, and what it was made with (style, lyrics, score, seeds, adapters) |
-| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves) |
+| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves). `?raw=1` is the decoder's peak-whole WAV when debuzz kept one (`audio.raw.wav`); 404 when the take has none |
 | POST | `/api/v1/takes/NAME/marks` | `{rating: 1 / -1 / 0, favorite: true/false, note: "…"}` |
 | POST | `/api/v1/takes/NAME/reaper` | the take as a REAPER project (see the guide's DAW tab); answers where to fetch the ZIP |
 | GET | `/api/v1/takes/NAME/artwork` | its artwork (a redirect to the JPEG, 768 px), 404 until it has one |
@@ -26,7 +26,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | GET | `/api/v1/takes/NAME/derived` | the Refiner's tree: every branch made from the take, its files (each with a `url`), and what runs |
 | GET | `/api/v1/takes/NAME/file?path=derived/…` | one file of the tree (a redirect to it) |
 | POST | `/api/v1/takes/NAME/stems` | `{mode: four \| vocals, source}`: four by default; `source` a debuzzed or upscaled file of the tree, a set of its own (the same file again answers with the set it gave) |
-| POST | `/api/v1/takes/NAME/debuzz` | `{strength: 0.1–1, source}` |
+| POST | `/api/v1/takes/NAME/debuzz` | `{strength: 0.1–1, source}`: the take itself, when the engine already cleaned it, is not cured again |
 | POST | `/api/v1/takes/NAME/remaster` | `{source, preset, lufs, tp, hz432, deess, cleanup, fade, formats}` (the Refiner's Remaster step) |
 | POST | `/api/v1/takes/NAME/upscale` | `{mode: subtle \| normal \| high \| extreme, variants: 1 \| 2, keep, source}` |
 | POST | `/api/v1/takes/NAME/lyrics-check` | `{source, again}`: Whisper against the lyrics, the result when ready |
@@ -59,7 +59,8 @@ POST /api/v1/songs
   - `true`: Pieces. The music is not cut at the window. A song that fits is still one chunk.
   - Anything other than `true` or `false` is `400`.
   - An old client of `POST /synth`, `/api/v1/songs`, or the MCP tool that omits the field and asks for a length past one window (the engine's own default duration is 8:00) is no longer cut there. To keep that cut, send `false`. A saved `request.json` that does not contain the field is decided again the same way; one that contains `false` stays Whole.
-- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise). `nar_pieces` is passed on only when the request says it.
+- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is: `debuzzed` is false and `debuzz_note` is `mp3`, even when the request says `debuzz: true` (the checkbox can stay on; the file is not cleaned, and nothing reports `debuzzed: true`). A WAV32 (float) keeps the level the cure left, including a peak above full scale; 16- and 24-bit come down to 0.999 only when a peak would not fit. With no library (`--outputs` unset) the job's WAV is still cleaned, and the result's extra part named `raw` is the decoder's file (the same role as `audio.raw.wav`). A failed cure leaves the decoder's WAV as the audio and sets `debuzzed` false. Cancelling the job stops the cure: every variation is still saved, one whose cure finished stays `debuzzed` true, and one it did not finish is `debuzzed` false with note `cancel`. The cancelled job names those takes. `POST /takes/NAME/debuzz` on a take that is already cleaned does not run the cure again; pass `source` (for example `audio.raw.wav`) to cure that file. Anything other than `true` or `false` is `400`.
+- Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise). `nar_pieces` is passed on only when the request says it. `debuzz` defaults to `true` when the request leaves it out.
 - `workspace`: the take lands there when it is done.
 
 ### A melody as a MIDI file

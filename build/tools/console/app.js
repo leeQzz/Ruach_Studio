@@ -1377,6 +1377,8 @@
     var notes = [];
     // HERESY 1167: the music's ceiling is Max length itself now; the window is the other cap (1169: said in Max length's own tip)
     if (format === "wav32") notes.push("WAV 32 is raw float: peak clip is ignored.");
+    if (format === "mp3" && $("debuzz").checked) notes.push("Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.");
+    if (!$("debuzz").checked) notes.push("Frame buzz stays: the take is the decoder's own, peaks whole.");
     var longOne = longNote();                         // HERESY 2509: said with its numbers, already in the page's language
     $("outHint").textContent = notes.map(tr).concat(longOne ? [longOne] : []).join(" ");
     syncMusicCeiling();                               // HERESY 1167: the music's Max length follows
@@ -1519,6 +1521,7 @@
   }
   ["versions", "variations"].forEach(function (id) { $(id).addEventListener("input", paintCounts); });
   paintCounts();
+  $("debuzz").addEventListener("change", paintOutput);   // the 25 Hz buzz; kept off the Long songs listeners
 
   function outputChanged() {
     var off = function (id, key) { var v = parseFloat($(id).value); return isFinite(v) && v !== round(outDefault(key), 3); };
@@ -1528,11 +1531,16 @@
       $("narLong").value !== "whole";                                              // HERESY 2509: whole, held to one window, the default
   }
   $("resetOutput").addEventListener("click", function () {
-    askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
+    askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, the 25 Hz buzz taken out, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
       clock(outDefault("duration")) + ": what is set here now is kept nowhere else.").then(function (ok) { if (ok) resetOutputNow(); });
   });
+  // Frame buzz sits beside outputChanged, not inside it: PR #4 rewrites the Long songs line of that return.
+  outputChanged = function (base) {
+    return function () { return base() || ($("debuzz") && !$("debuzz").checked); };
+  }(outputChanged);
   function resetOutputNow() {
     store("yue2.output", null);
+    $("debuzz").checked = true;                         // the 25 Hz buzz out; not on the Long songs line
     paintOutputDefaults();
     if ($("narLong")) $("narLong").dataset.picked = "";   // the last paintOutput may move Whole to Pieces
     // HERESY 1168 (Viktor 07.10.2026: «Reset output не обнуляет выбор резолвера»): the solver back to midpoint too
@@ -1541,7 +1549,7 @@
     $("narDecode").value = "standard";                  // HERESY 1768: the whole-song decode
     $("narLong").value = "whole";                       // HERESY 2509: held to one window, never joined
     paintOutput();
-    toast("Output reset: WAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
+    toast("Output reset: WAV 24-bit, the 25 Hz buzz taken out, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
   }
 
   function readOutput() {
@@ -1565,6 +1573,7 @@
     }
     out.output_format = $("outFormat").value;
     if (out.output_format === "mp3") out.mp3_bitrate = parseInt($("mp3Bitrate").value, 10) || 128;
+    out.debuzz = $("debuzz").checked;                 // false keeps the decoder's peak-whole file; true is also the server's default
     return out;
   }
 
@@ -2829,6 +2838,7 @@
     if (typeof semCap === "number" && semCap > 0 && (!isFinite(lenNow) || semCap / FRAME_RATE < lenNow)) $("maxLength").value = round(semCap / FRAME_RATE, 3);
     clampLength("This take's length");   // HERESY 1468: a longer one comes in at the mode's top, said aloud
     syncShape();
+    if ($("debuzz")) $("debuzz").checked = req.debuzz !== false;   // absent, as an older take: the default, on
     paintOutput();
     growLyrics();
     queueComfort();   // HERESY 1145: every box's height, the style's too: Retake, Reuse and Open land after their click
@@ -2842,7 +2852,7 @@
   // HERESY 1607, 1609: harmony and abc_continue among a prompt file's keys
   var PROMPT_KEYS = ["title", "style", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
     "vae", "solver", "nar_ladder", "nar_pieces", "sliders", "loras", "lora_groups", "plan_only", "semantic_tokens", "semantic_keep", "parent", "duration", "steps",
-    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "score_guard", "seconds", "instrumental"];
+    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "debuzz", "score_guard", "seconds", "instrumental"];
   var GROUP_NAMES = { abc: "Score planner", semantic: "Music tokens" };
   function openNotes(req) {
     var notes = [], say = function (text) { notes.push(text); };
@@ -3375,7 +3385,7 @@
     }
     if (status === "done") return finishJob(job, data);
     if (status === "failed") return failJob(job, data.error || job.lastFatal || "The run failed; the server log (Engine) has the reason.", data);
-    if (status === "cancelled") return cancelledJob(job);
+    if (status === "cancelled") return cancelledJob(job, data);
   }
 
   function settle(job, status) {
@@ -3488,10 +3498,34 @@
   window.ruachLogLine = onLogLine; window.ruachJobById = jobById;   // HERESY 1765: for the checks (a run from elsewhere, line by line)
   window.ruachRegisterJob = registerJob;             // HERESY 1766: for the checks (a slow POST claiming its run)
 
-  function cancelledJob(job) {
+  function cancelledJob(job, data) {
     if (!isLive(job)) return;
     planTake(job);                                        // HERESY 2133: a cancelled plan is sung by no one
     job.error = "";
+    var names = (data && data.takes) || [];
+    var made = data && typeof data.made === "number" ? data.made : 0;
+    // A cure that was stopped still keeps every variation: in the library, or (no library) in this tab.
+    // Each saved take's own debuzzed flag says whether that one finished.
+    if (names.length) {
+      job.takes = names;
+      settle(job, "cancelled");
+      toastOnce(job.id, "Cancelled: " + job.title);
+      refreshLibrary();
+      return;
+    }
+    if (made > 0 && !STATE.library && job.kind !== "transcribe" && !(job.request && job.request.plan)) {
+      sessionTakes(job).then(function (takes) {
+        if (!isLive(job)) return;
+        job.takes = takes;
+        settle(job, "cancelled");
+        toastOnce(job.id, "Cancelled: " + job.title);
+      }, function () {
+        if (!isLive(job)) return;
+        settle(job, "cancelled");
+        toastOnce(job.id, "Cancelled: " + job.title);
+      });
+      return;
+    }
     settle(job, "cancelled");
     toastOnce(job.id, "Cancelled: " + job.title);
     if (job.kind === "transcribe") transcriptionFailed(job, "Transcription cancelled.");
@@ -3695,7 +3729,12 @@
         var pending = null;
         splitMultipart(new Uint8Array(res.buffer), match[1].replace(/"/g, "")).forEach(function (part) {
           if (/json/.test(part.type)) pending = parseJSON(new TextDecoder().decode(part.body));
-          else if (pending) { pairs.push({ request: pending, audio: new Blob([part.body], { type: part.type }) }); pending = null; }
+          else if (/name="raw"/i.test(part.disposition || "") && pairs.length) {
+            pairs[pairs.length - 1].raw = new Blob([part.body], { type: part.type || "audio/wav" });
+          } else if (pending && !/octet-stream/.test(part.type)) {
+            pairs.push({ request: pending, audio: new Blob([part.body], { type: part.type }) });
+            pending = null;
+          }
         });
       } else {
         pairs.push({ request: {}, audio: new Blob([res.buffer], { type: res.type || "audio/mpeg" }) });
@@ -3711,6 +3750,8 @@
           vae: req.vae || job.request.vae, sliders: req.sliders || [], steps: req.steps || job.request.steps,
           cfg_scale: typeof req.cfg_scale === "number" ? req.cfg_scale : -1, cfg_lyrics: typeof req.cfg_lyrics === "number" ? req.cfg_lyrics : -1, duration: req.duration,
           truncated: false, render_seconds: job.finished ? (job.finished - job.started) / 1000 : 0,
+          debuzzed: !!pair.raw, debuzz_note: pair.raw ? "" : (req.output_format === "mp3" && req.debuzz !== false ? "mp3" : ""),
+          rawUrl: pair.raw ? URL.createObjectURL(pair.raw) : "",
           song: Math.floor(n / variations), variation: n % variations, parent: req.parent || "", has_score: !!req.abc
         };
         STATE.session.unshift(take);
@@ -3732,9 +3773,12 @@
         if (bytes[k] === 13 && bytes[k + 1] === 10 && bytes[k + 2] === 13 && bytes[k + 3] === 10) { split = k; break; }
       }
       if (split < 0) continue;
-      var head = new TextDecoder().decode(bytes.slice(start, split)), type = "application/octet-stream";
-      head.split(/\r\n/).forEach(function (line) { var m = line.match(/^Content-Type:\s*(.+)$/i); if (m) type = m[1].trim(); });
-      parts.push({ type: type, body: bytes.slice(split + 4, end) });
+      var head = new TextDecoder().decode(bytes.slice(start, split)), type = "application/octet-stream", disposition = "";
+      head.split(/\r\n/).forEach(function (line) {
+        var m = line.match(/^Content-Type:\s*(.+)$/i); if (m) type = m[1].trim();
+        var d = line.match(/^Content-Disposition:\s*(.+)$/i); if (d) disposition = d[1].trim();
+      });
+      parts.push({ type: type, disposition: disposition, body: bytes.slice(split + 4, end) });
     }
     return parts;
   }
@@ -6256,6 +6300,15 @@
     var codes = rq.semantic_tokens ? String(rq.semantic_tokens).split(",").length : null;
     var made = music ? music.tokens + (music.kept ? " + " + music.kept + " " + tr("kept") : "") : codes;
     var frames = music ? music.tokens + music.kept : codes;
+    // The request's debuzz flag is the ask. The take's own debuzzed is what happened: an MP3 is never cleaned,
+    // so the card does not say "on" for one.
+    function debuzzSaid() {
+      if (take && take.debuzzed === true) return tr("on");
+      if ((take && take.debuzz_note === "mp3") || (rq && rq.output_format === "mp3" && rq.debuzz !== false)) return tr("MP3, left encoded");
+      if ((take && take.debuzzed === false) || (rq && rq.debuzz === false)) return tr("off");
+      if (rq && rq.debuzz === true) return tr("on");
+      return "\u2014";
+    }
     var g = music ? music.guidance : (typeof rq.cfg_scale === "number" && rq.cfg_scale >= 0 ? rq.cfg_scale : null);
     var gl = music ? music.lyrics_guidance : (typeof rq.cfg_lyrics === "number" && rq.cfg_lyrics >= 0 ? rq.cfg_lyrics : null);
     var plan = take.cot === "off" ? cell("Tokens", "Score tokens", tr("no score"), "") :
@@ -6268,6 +6321,7 @@
       smp(rq.semantic_sampling, "Music") + cell("Length cap", "Length cap", rq.duration ? rq.duration + " s" : "\u2014");
     var run = cell("Solver", "Solver", n(rq.solver), "") + cell("Steps", "Run steps", n(rq.steps || take.steps)) + cell("Sound stage", "Sound stage", sound ? secs(sound.seconds) : "\u2014") +
       cell("Decoder", "Decoder", sound ? secs(sound.vae_seconds) : "\u2014") + cell("Whole run", "Whole run", secs(take.render_seconds)) +
+      cell("Debuzz", "Debuzz", debuzzSaid(), "") +
       cell("Realtime", "Realtime", take.render_seconds && take.seconds ? "\u00d7" + (take.seconds / take.render_seconds).toFixed(2) : "\u2014") +
       cell("Versions \u00d7 variations", "Versions x variations", (rq.lm_batch_size || 1) + " \u00d7 " + (rq.synth_batch_size || 1)) +
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
@@ -7283,6 +7337,7 @@
     delete STATE.requests[take.name];
     delete STATE.peakCache[takeAudioUrl(take)];
     if (take.session && take.url) URL.revokeObjectURL(take.url);
+    if (take.session && take.rawUrl) URL.revokeObjectURL(take.rawUrl);
     if (STATE.playerTake && STATE.playerTake.name === take.name) clearPlayer();
     if (STATE.take && STATE.take.name === take.name) clearTakeView();
   }
@@ -12263,6 +12318,7 @@
       nar_pieces: $("narLong").value === "pieces",                                                   // HERESY 2509
       synth_batch_size: parseInt($("variations").value, 10), lm_batch_size: parseInt($("versions").value, 10),
       output_format: $("outFormat").value, mp3_bitrate: parseInt($("mp3Bitrate").value, 10),
+      debuzz: $("debuzz").checked,
       vae: selectedVae(), sliders: STATE.sliderChoice || [], loras: YueLoras.kept ? YueLoras.kept() : YueLoras.value(),   // HERESY 1167: the muted kept
       lora_groups: YueLoras.groups ? YueLoras.groups() : []   // HERESY 1447
     };
@@ -12318,8 +12374,9 @@
   // A knob off its default is marked. The default is the value attribute: the page
   // already writes each knob's default there as its step base, so no second table
   // is kept. Only numbers, ranges and the solver: text and seeds have no default.
-  var MARKED = 'input[type="number"], input[type="range"], select#odeSolver, select#narDecode, select#narLong';   // HERESY 1768: the decode too; 2509: Long songs
+  var MARKED = 'input[type="number"], input[type="range"], select#odeSolver, select#narDecode, select#narLong, input#debuzz';   // HERESY 1768: the decode too; 2509: Long songs; the frame buzz
   function isChanged(el) {
+    if (el.type === "checkbox") return el.checked !== el.defaultChecked;
     if (el.tagName === "SELECT") {
       var base = 0;
       for (var i = 0; i < el.options.length; i++) if (el.options[i].defaultSelected) { base = i; break; }
@@ -12489,7 +12546,7 @@
   // A profile is every knob but the texts and seeds, written out in full (defaults too), so it
   // means the same on a server whose defaults moved. Applying one keeps the texts, seeds and codes.
   var SETUP_KEYS = ["cot", "duration", "cfg_scale", "cfg_lyrics", "steps", "solver", "nar_ladder", "nar_pieces", "vae", "sliders", "loras", "output_format",
-                    "mp3_bitrate", "synth_batch_size", "lm_batch_size"];   // HERESY 1768: nar_ladder; 2007: no peak_clip
+                    "mp3_bitrate", "debuzz", "synth_batch_size", "lm_batch_size"];   // HERESY 1768: nar_ladder; 2007: no peak_clip; the 25 Hz buzz
   function captureSetup() {
     var b = buildRequest(false, false, true), out = {};
     SETUP_KEYS.forEach(function (k) { if (b[k] !== undefined) out[k] = b[k]; });
@@ -12508,6 +12565,7 @@
     if (out.nar_ladder === undefined) out.nar_ladder = false;   // HERESY 1768: written in full, the whole-song decode said too
     if (out.nar_pieces === undefined) out.nar_pieces = false;   // HERESY 2509: whole said too
     if (out.synth_batch_size === undefined) out.synth_batch_size = 1;
+    if (out.debuzz === undefined) out.debuzz = true;   // the 25 Hz buzz out, written in full so a saved profile keeps an off
     out.sliders = out.sliders || [];
     out.loras = out.loras || [];
     return out;

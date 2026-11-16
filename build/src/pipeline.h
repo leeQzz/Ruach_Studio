@@ -21,6 +21,7 @@
 #include "audio-resample.h"
 #include "generate.h"
 #include "model-store.h"
+#include "nar-seam.h"
 #include "nar.h"
 #include "request.h"
 #include "score-guard.h"
@@ -684,7 +685,7 @@ static bool pipeline_continue_codes(Yue2Pipeline *           p,
     if (whole_cap > 0 && whole_cap - (b - a) < budget) {   // HERESY 2509: whole, the song held to one window of the sound half
         if (whole_cap - (b - a) < 1) {
             p->last_error = "the section (" + std::to_string((b - a) / YUE2_FRAME_RATE) + " s) already fills one window of the sound half here (" +
-                            std::to_string(whole_cap / YUE2_FRAME_RATE) + " s): a whole song cannot go on from it; Long songs: Pieces (experimental) can";
+                            std::to_string(whole_cap / YUE2_FRAME_RATE) + " s): a whole song cannot go on from it; Long songs: Pieces can";
             fprintf(stderr, "[Continue] FATAL: %s\n", p->last_error.c_str());
             return false;
         }
@@ -865,10 +866,7 @@ static std::string yue2_score_vocal_octave(const std::string & abc, int octaves,
 // HERESY 1087, 2433: yue2_score_broken lives in score-guard.h
 
 
-// HERESY 1768: the decode ladder: pieces of about 20 s (25 frames a second), each hearing 2 s past its edges
-static const int YUE2_LADDER_PIECE  = 500;
-static const int YUE2_LADDER_MARGIN = 50;
-
+// HERESY 1768: the decode ladder: pieces of about 20 s (25 frames a second), each hearing 2 s past its edges.
 // HERESY 2352: the seam of a song longer than one window of the sound half. The window holds the prefix, the piece's codes and its latent block
 // (chunk_sizes below), so a song past it (about 340-410 s, by the prefix) was solved in two pieces butted together, the first one's window
 // closed by the end token right at the edge and the second one's opened at it with no music before: measured 07.11.2026 on 25 such takes of 21
@@ -876,8 +874,8 @@ static const int YUE2_LADDER_MARGIN = 50;
 // fade before it; the same profile at random points of the same songs: 0 dB. Now the pieces are even and each one's window hears
 // YUE2_SEAM_MARGIN frames past an inner edge, so neither end of a window falls near the edge; the neighbours meet in complementary
 // half-cosines YUE2_SEAM_XFADE frames either side of it, in their latents, solved from the same noise (the ladder's join, one edge).
-static const int YUE2_SEAM_MARGIN = 150;   // 6 s
-static const int YUE2_SEAM_XFADE  = 50;    // 2 s either side of the edge
+// The plan (nar-seam.h) keeps every window inside the context, the crossfade inside the overlap, and the last piece
+// at least as long as the crossfade, so a long song is not left with a one-frame tail or a window the graph refuses.
 
 #ifdef YUE2_SEAM_TEST
 static int seam_env(const char * name, int dflt) {   // the kitchen's knobs (heresy/MISC/claude-arc/nar-seam): never in the Studio's build
@@ -897,8 +895,9 @@ static bool seam_on() {
 
 // HERESY 2509: one window of the sound half for a song of this prompt: the context holds the prefix, the codes and their latent block
 // (two rows a frame). The model's own context is 24576 rows (about 6 to 7.8 minutes by the prefix); an Engine context set smaller for a
-// card's memory makes it shorter. A song past it can only be solved in pieces (2352's seam), so whole is the default and holds the music
-// half's budget to it; nar_pieces lets a longer song go on (experimental).
+// card's memory makes it shorter. A request that says nar_pieces false (Whole) holds the music half's budget to this window.
+// Left out, a length past the window keeps that budget and joins the sound, the same default as the console. An explicit
+// nar_pieces does the same (nar-seam.h).
 static int nar_window(int context, size_t prefix) {
     int window = (context - (int) prefix - 3) / 2;
 #ifdef YUE2_SEAM_TEST
@@ -910,7 +909,7 @@ static int nar_window(int context, size_t prefix) {
 }
 
 static bool pipeline_generate(Yue2Pipeline *          p,
-                              const Yue2Request &     r,
+                              Yue2Request &           r,
                               std::vector<Yue2Song> * songs,
                               bool (*cancelled)(void *) = nullptr,
                               void * cancel_data        = nullptr) {
@@ -1171,10 +1170,31 @@ static bool pipeline_generate(Yue2Pipeline *          p,
         }
     }
 
-    // HERESY 2509: whole by default: the music half's budget held to the shortest window of the batch, so no song needs pieces; the
-    // ladder (1768) and nar_pieces solve any length in pieces, and supplied codes are solved as they come
+    // HERESY 2509: a request that says nar_pieces false holds the music to the shortest window of the batch.
+    // Left out follows the console: past that window the music is not cut and the sound is joined. The ladder
+    // (1768) and an explicit nar_pieces solve any length in pieces, and supplied codes are solved as they come.
+    bool pieces = r.nar_pieces;
+    bool omitted_join = false;
+    if (!replay && !r.nar_ladder && !r.nar_pieces_set) {
+        int win = INT_MAX;
+        for (int i = 0; i < B; i++) {
+            win = std::min(win, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
+        }
+        win = std::max(win, 1);
+        int want = (int) (r.duration * (float) YUE2_FRAME_RATE);
+        if (want <= 0 || want > r.semantic_sampling.max_tokens) {
+            want = r.semantic_sampling.max_tokens;
+        }
+        pieces = nar_pieces_effective(false, false, want, win);
+        // The take's request.json is this object. Record the join, or a later reuse reads the omission as Whole and cuts the song.
+        if (pieces) {
+            omitted_join     = true;
+            r.nar_pieces     = true;
+            r.nar_pieces_set = true;
+        }
+    }
     int whole_cap = 0;
-    if (!replay && !r.nar_ladder && !r.nar_pieces) {
+    if (!replay && !r.nar_ladder && !pieces) {
         whole_cap = INT_MAX;
         for (int i = 0; i < B; i++) {
             whole_cap = std::min(whole_cap, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
@@ -1223,6 +1243,22 @@ static bool pipeline_generate(Yue2Pipeline *          p,
             window_bound        = true;
             if (semantic.min_tokens > semantic.max_tokens) {
                 semantic.min_tokens = semantic.max_tokens;
+            }
+        } else if (whole_cap == 0 && (pieces || r.nar_ladder)) {
+            // Pieces and the ladder keep the music budget (the requested length, else the stage's own cap).
+            // One sound window is not allowed to cut it; the sound half joins what does not fit.
+            int win = INT_MAX;
+            for (int i = 0; i < B; i++) {
+                win = std::min(win, nar_window(p->kv.cfg.max_seq_len, prefixes[i].size()));
+            }
+            if (win > 0 && win < INT_MAX && semantic.max_tokens > win) {
+                if (omitted_join) {
+                    fprintf(stderr, "[AR] nar_pieces was left out and the budget stays %d (%.1f s): past one window of %d frames (%.1f s), so the music is not cut (send false to stop at the window)\n",
+                            semantic.max_tokens, (double) semantic.max_tokens / YUE2_FRAME_RATE, win, (double) win / YUE2_FRAME_RATE);
+                } else {
+                    fprintf(stderr, "[AR] Frame budget stays %d (%.1f s): past one window of %d frames (%.1f s), solved in pieces, the music is not cut\n",
+                            semantic.max_tokens, (double) semantic.max_tokens / YUE2_FRAME_RATE, win, (double) win / YUE2_FRAME_RATE);
+                }
             }
         }
         // Local addition: the sliders steer the music tokens only, then leave
@@ -1312,8 +1348,9 @@ static bool pipeline_generate(Yue2Pipeline *          p,
     int       row0, rows;
     yue2_phase_rows(YUE2_PHASE_SEMANTIC, &row0, &rows);
     std::vector<float> probe((size_t) rows);
-    std::vector<int>   chunk_sizes(B);
-    std::vector<int>   seam_margin(B, 0);   // HERESY 2352: what a song's windows hear past an inner edge (0: one window, or the ladder)
+    std::vector<int>          chunk_sizes(B);
+    std::vector<int>          seam_margin(B, 0);   // HERESY 2352: what a song's windows hear past an inner edge (0: one window, or a butt join)
+    std::vector<NarPiecePlan> piece_plans(B);
 
     songs->assign((size_t) B * M, {});
     for (int i = 0; i < B; i++) {
@@ -1322,22 +1359,31 @@ static bool pipeline_generate(Yue2Pipeline *          p,
             fprintf(stderr, "[Pipeline] FATAL: empty semantic stream\n");
             return false;
         }
-        chunk_sizes[i] = nar_window(context, prefixes[i].size());   // HERESY 2509: said once, the budget reads it too
-        if (r.nar_ladder) {                           // HERESY 1768: even pieces of about 20 s, room for their windows' 2 s either side
-            const int n = (T_lat + YUE2_LADDER_PIECE - 1) / YUE2_LADDER_PIECE, even = (T_lat + n - 1) / n;
-            if (n > 1 && even + 2 * YUE2_LADDER_MARGIN <= chunk_sizes[i]) {
-                chunk_sizes[i] = even;
+        const int window = nar_window(context, prefixes[i].size());   // HERESY 2509: said once, the budget reads it too
+        const bool seam_wanted = seam_on() && seam_env("YUE2_T_SEAM", 1);
+        NarPiecePlan plan;
+        plan.piece = window > 0 ? window : 1;
+        if (r.nar_ladder) {                           // HERESY 1768: even pieces of about 20 s, when their windows fit
+            plan = nar_plan_ladder(T_lat, window, YUE2_LADDER_PIECE, YUE2_LADDER_MARGIN);
+            if (!plan.joined && T_lat > window && seam_wanted) {
+                // A full-window ladder piece plus its margin would overflow the graph. Join with a fitting overlap instead.
+                plan = nar_plan_pieces(T_lat, window, seam_env("YUE2_T_MARGIN", YUE2_SEAM_MARGIN),
+                                       seam_env("YUE2_T_XFADE", YUE2_SEAM_XFADE), seam_env("YUE2_T_EVEN", 1) != 0);
+                fprintf(stderr, "[NAR] Song %d: ladder pieces do not fit a window of %d frames; joined as a long song\n", i, window);
             }
-        } else if (T_lat > chunk_sizes[i] && seam_on() && seam_env("YUE2_T_SEAM", 1)) {   // HERESY 2352: even pieces whose windows hear the margin past an inner edge
-            const int window = chunk_sizes[i], margin = seam_env("YUE2_T_MARGIN", YUE2_SEAM_MARGIN);
-            for (int n = 2; margin > 0 && 4 * margin < window; n++) {
-                const int even = (T_lat + n - 1) / n;
-                if (even + (n > 2 ? 2 : 1) * margin <= window) {
-                    chunk_sizes[i] = n == 2 && !seam_env("YUE2_T_EVEN", 1) ? window - margin : even;
-                    seam_margin[i] = margin;
-                    break;
-                }
-            }
+        } else if (T_lat > window && seam_wanted) {   // HERESY 2352: even pieces whose windows hear the margin past an inner edge
+            plan = nar_plan_pieces(T_lat, window, seam_env("YUE2_T_MARGIN", YUE2_SEAM_MARGIN),
+                                   seam_env("YUE2_T_XFADE", YUE2_SEAM_XFADE), seam_env("YUE2_T_EVEN", 1) != 0);
+        }
+        if (plan.piece < 1) {
+            plan.piece = window > 0 ? window : 1;
+        }
+        chunk_sizes[i]  = plan.piece;
+        seam_margin[i]  = plan.joined ? plan.margin : 0;
+        piece_plans[i]  = plan;
+        if (!plan.joined && T_lat > window) {
+            fprintf(stderr, "[NAR] Song %d: %d frames do not fit an overlapping join in a window of %d: butted, no crossfade\n",
+                    i, T_lat, window);
         }
         if (chunk_sizes[i] < 1) {
             fprintf(stderr, "[Pipeline] FATAL: prefix %zu leaves no acoustic context in %d\n", prefixes[i].size(),
@@ -1402,19 +1448,22 @@ static bool pipeline_generate(Yue2Pipeline *          p,
         fprintf(stderr, "[NAR] Song %d: %d frames (%.1f s), prefix %d, %d chunk%s of %d, %d variation%s\n", i, T_lat,
                 (float) T_lat / (float) YUE2_FRAME_RATE, prefix_len, chunks, chunks > 1 ? "s" : "", chunk_size, M,
                 M > 1 ? "s" : "");
-        // HERESY 1768: the ladder: a piece's window hears YUE2_LADDER_MARGIN codes past its end and before its start; neighbours meet in a
-        // crossfade of their latents half a margin either side of their common edge. The noise stays in the latents until every piece is solved.
-        // HERESY 2352: a song past one window joins its pieces the same way, with the seam's margin and crossfade; its first window is sealed
-        const bool seam  = !r.nar_ladder && seam_margin[i] > 0 && chunks > 1;
-        const bool lad   = (r.nar_ladder || seam) && chunks > 1;
-        const int  lad_m = !lad ? 0 : (seam ? seam_margin[i] : YUE2_LADDER_MARGIN);
-        const int  lad_x = !seam ? YUE2_LADDER_MARGIN / 2 : std::max(1, std::min(lad_m, seam_env("YUE2_T_XFADE", YUE2_SEAM_XFADE)));
+        // HERESY 1768: the ladder: a piece's window hears its margin past both edges; neighbours meet in a
+        // crossfade of their latents. The noise stays in the latents until every piece is solved.
+        // HERESY 2352: a song past one window joins the same way. The plan (nar-seam.h) is what both follow:
+        // the margin and the crossfade are the ones that fit, and a one-frame tail is not left behind.
+        const NarPiecePlan & plan  = piece_plans[i];
+        const bool seam = plan.joined && !r.nar_ladder && chunks > 1;
+        const bool lad  = plan.joined && chunks > 1;
+        const int  lad_m = lad ? plan.margin : 0;
+        const int  lad_x = lad ? plan.xfade : 0;
         std::vector<std::vector<float>> lad_acc(lad ? M : 0, std::vector<float>(lad ? (size_t) T_lat * YUE2_LATENT_DIM : 0, 0.0f));
+        std::vector<std::vector<float>> lad_w(lad ? M : 0, std::vector<float>(lad ? (size_t) T_lat : 0, 0.0f));
         std::vector<std::vector<float>> seam_prev(seam ? M : 0);   // HERESY 2352: the window before, where it overlaps the next one, to say how they agree
         int                             seam_prev_at = 0;
-        if (seam) {
-            fprintf(stderr, "[NAR] seam: %d pieces of %d frames, each window hearing %d past an inner edge, joined over %d\n", chunks, chunk_size,
-                    lad_m, 2 * lad_x);
+        if (seam || (lad && plan.margin != YUE2_LADDER_MARGIN)) {
+            fprintf(stderr, "[NAR] seam: %d pieces of %d frames, each window hearing %d past an inner edge, joined over %d%s\n", chunks, chunk_size,
+                    lad_m, 2 * lad_x, plan.margin_shrunk ? " (the overlap shortened to fit the window)" : "");
         } else if (lad) {
             fprintf(stderr, "[NAR] ladder: %d pieces of %d frames, each hearing %d past its edges, joined over %d\n", chunks, chunk_size, lad_m, 2 * lad_x);
         }
@@ -1435,7 +1484,9 @@ static bool pipeline_generate(Yue2Pipeline *          p,
             sequence.push_back(YUE2_MUSIC_END);
             // With sliders the cache the AR decode left carries their steer, so
             // the first chunk re-prefills the whole sequence without them
-            const int kept = start > 0 ? prefix_len : ((replay || sliders_used || (lad && !seam)) ? 0 : ar_len);   // 1768: a ladder reads its first window again (2352: a seam's is sealed)
+            // 1768: a ladder reads its first window again, joined or butted (a seam's is sealed, 2352)
+            const int kept = start > 0 ? prefix_len
+                                       : (nar_reread_first_window(replay, sliders_used, r.nar_ladder, chunks) ? 0 : ar_len);
             if (kept < ar_len) {
                 nar_hold.reset();
                 nar                = nullptr;
@@ -1558,27 +1609,21 @@ static bool pipeline_generate(Yue2Pipeline *          p,
                            block.data() + span * j, span * sizeof(float));
                     continue;
                 }
-                // HERESY 1768: complementary half-cosines centred on the piece's own edges, inside both neighbours' windows
-                auto ramp = [](float u) { u = u < 0.0f ? 0.0f : (u > 1.0f ? 1.0f : u); return 0.5f - 0.5f * cosf(3.14159265f * u); };
-                for (int t = ws; t < ws + frames; t++) {
-                    const float up   = start == 0 ? 1.0f : ramp((float) (t - (start - lad_x)) / (float) (2 * lad_x));
-                    const float down = start + nf >= T_lat ? 1.0f : 1.0f - ramp((float) (t - (start + nf - lad_x)) / (float) (2 * lad_x));
-                    const float w    = up * down;
-                    if (w <= 0.0f) {
-                        continue;
-                    }
-                    float *       dst = lad_acc[j].data() + (size_t) t * YUE2_LATENT_DIM;
-                    const float * src = block.data() + span * j + (size_t) (t - ws) * YUE2_LATENT_DIM;
-                    for (int d = 0; d < YUE2_LATENT_DIM; d++) {
-                        dst[d] += w * src[d];
-                    }
-                }
+                // Complementary half-cosines centred on the piece's own edges (nar-seam.h). A sum other than 1
+                // is scaled back after every piece, so an overlap cannot boost the latent or leave a hole of silence.
+                nar_seam_accumulate(lad_acc[j].data(), lad_w[j].data(), T_lat, YUE2_LATENT_DIM, start, nf, ws, frames, lad_x,
+                                    block.data() + span * j);
             }
             fprintf(stderr, "[NAR] Song %d chunk %d/%d: %d frames, cache %d rows, %d forwarded, %.1f s\n", i,
                     start / chunk_size + 1, chunks, frames, ar_len, ar_len - kept, chunk_timer.ms() / 1000.0);
         }
         if (lad) {                                    // HERESY 1768: the blend in place of the noise, once every piece is solved
             for (int j = 0; j < M; j++) {
+                int holes = nar_seam_holes(lad_w[j].data(), T_lat);
+                if (holes > 0) {
+                    fprintf(stderr, "[NAR] Song %d variation %d: %d frame%s with no window over them\n", i, j, holes, holes == 1 ? "" : "s");
+                }
+                nar_seam_finish(lad_acc[j].data(), lad_w[j].data(), T_lat, YUE2_LATENT_DIM);
                 memcpy((*songs)[(size_t) i * M + j].latents.data(), lad_acc[j].data(), lad_acc[j].size() * sizeof(float));
             }
         }

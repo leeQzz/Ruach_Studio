@@ -1365,6 +1365,7 @@
   setInterval(function () { if (String($("odeSteps").value) !== stepsShown) syncStepsRange(); }, 400);   // a value the page set by itself (a take's form)
 
   function paintOutput() {
+    syncLongDefault();
     syncStepsRange();                                 // HERESY 1498
     var format = $("outFormat").value;
     $("bitrateField").classList.toggle("is-hidden", format !== "mp3");
@@ -1390,23 +1391,115 @@
 
   $("outFormat").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
   $("mp3Bitrate").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
-  ["odeSteps", "maxLength"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
-  ["narLong", "narDecode"].forEach(function (id) { $(id).addEventListener("change", paintOutput); });   // HERESY 2509: the window's note follows
-  // HERESY 2509: one window of the sound half on this engine's context, for a long prompt and a short one (6000 and 1000 rows: about the
-  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days); the pipeline's own count, (context - prefix - 3) / 2 frames
+  ["odeSteps", "maxLength", "style", "lyrics", "abc"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
+  $("narDecode").addEventListener("change", paintOutput);
+  $("narLong").addEventListener("change", function () {
+    this.dataset.picked = "1";   // an explicit Whole or Pieces, not the automatic default
+    paintOutput();
+  });
+  // One window of the sound half: (context - prefix - 3) / 2 frames. 6000 and 1000 rows are about the
+  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days. The request in the form can be longer
+  // than that sample; byte-level BPE is at most one token a byte, so the text's bytes are a ceiling on its
+  // prefix and the window we trust is the shorter of the sample and that ceiling.
+  function contextRows() {
+    return STATE.settings && +STATE.settings.max_seq ? +STATE.settings.max_seq : fullContext();
+  }
+  function windowFrames(prefix) {
+    return Math.max(0, Math.floor((contextRows() - prefix - 3) / 2));
+  }
+  function utf8Bytes(text) {
+    var bytes = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c < 0x80) bytes += 1;
+      else if (c < 0x800) bytes += 2;
+      else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < text.length) { bytes += 4; i++; }
+      else bytes += 3;
+    }
+    return bytes;
+  }
+  function prefixGuessFrom(style, lyrics, abc) {
+    var bytes = utf8Bytes([style || "", lyrics || "", abc || ""].join("\n")) + 80;
+    return bytes > 6000 ? bytes : 6000;
+  }
+  function prefixGuess() {
+    return prefixGuessFrom($("style") && $("style").value, $("lyrics") && $("lyrics").value, $("abc") && $("abc").value);
+  }
   function wholeWindow() {
-    var ctx = STATE.settings && +STATE.settings.max_seq ? +STATE.settings.max_seq : fullContext();
-    var at = function (prefix) { return Math.max(0, Math.floor((ctx - prefix - 3) / 2) / FRAME_RATE); };
-    return [at(6000), at(1000)];
+    return [windowFrames(prefixGuess()) / FRAME_RATE, windowFrames(1000) / FRAME_RATE];
   }
-  // said when Max length is well past what one window holds (30 s past its short-prompt end), whole and not on the ladder
-  function longNote() {
-    if ($("narLong").value !== "whole" || $("narDecode").value === "ladder") return "";
+  // What the take card may call the run. A supplied stream (a replay, or frames kept from a moment) is solved
+  // as it stands: past one window the sound is joined even when nar_pieces was left off, so that run is not "Whole".
+  function suppliedFrames(rq) {
+    var n = 0;
+    ["semantic_tokens", "semantic_keep"].forEach(function (k) {
+      if (!rq || !rq[k]) return;
+      var c = String(rq[k]).split(",").filter(function (t) { return t.trim(); }).length;
+      if (c > n) n = c;
+    });
+    return n;
+  }
+  function longSongLabel(rq) {
+    if (rq && rq.nar_pieces === true) return tr("Pieces · joined");
+    var n = suppliedFrames(rq);
+    if (n > 0) {
+      var generous = windowFrames(48);   // the instruction and the specials: the longest one window can be
+      if (generous > 0 && n > generous) return tr("Pieces · joined");
+      // The text's bytes overestimate its prefix, so this window is a floor. Past it, the stream may have been joined.
+      var own = windowFrames(prefixGuessFrom(rq && rq.style, rq && rq.lyrics, rq && rq.abc));
+      if (!(own > 0) || n > own) return "\u2014";
+    }
+    return tr("Whole · one window");
+  }
+  // test-nar-seam holds (weights sum to 1, no stub tail, every window fits). While it does, a Max length past one
+  // window starts on Pieces so the music is not cut. Set this false if those checks fail: the page then stays on Whole and warns.
+  var NAR_SEAM_DEFAULT_PIECES = true;
+  function pastOneWindow() {
     var length = parseFloat($("maxLength").value), win = wholeWindow();
-    if (!isFinite(length) || length <= win[1] + 30) return "";
-    return tr("Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score): the song stops where the window ends. Longer: Long songs · Pieces (experimental).")
-      .replace("{0}", clock(length)).replace("{1}", clock(win[0])).replace("{2}", clock(win[1]));
+    if (!isFinite(length) || length <= 0) return false;
+    // No trusted window (the prompt's own ceiling fills the context) is already past one window.
+    if (!(win[0] > 0)) return true;
+    return length > win[0];
   }
+  function longDefault() {
+    return NAR_SEAM_DEFAULT_PIECES && pastOneWindow() ? "pieces" : "whole";
+  }
+  function syncLongDefault() {
+    var el = $("narLong");
+    if (!el || el.dataset.picked === "1") return;
+    var want = longDefault();
+    if (el.value !== want) el.value = want;
+  }
+  function longNote() {
+    if ($("narDecode").value === "ladder" || !pastOneWindow()) return "";
+    var length = parseFloat($("maxLength").value), win = wholeWindow();
+    var head = tr("Max length {0} is past one window here (about {1}–{2}, by the lyrics and the score).")
+      .replace("{0}", clock(length)).replace("{1}", clock(win[0])).replace("{2}", clock(win[1]));
+    if ($("narLong").value === "pieces") {
+      if (!NAR_SEAM_DEFAULT_PIECES) {
+        return head + " " + tr("Pieces joins the sound past that window. The seam checks did not pass: a join can be wrong. Whole stops the music at the window.");
+      }
+      return head + " " + tr("Pieces is on: the music runs to Max length and the sound is joined (6 s of overlap, a 4 s crossfade). Whole stops the music at the window.");
+    }
+    if (!NAR_SEAM_DEFAULT_PIECES) {
+      return head + " " + tr("The song stops where the window ends. Pieces is not the default: the seam checks did not pass. Choose Pieces only if you accept an unchecked join.");
+    }
+    return head + " " + tr("Whole stops the music where the window ends. Choose Pieces to run to Max length; the sound is then joined.");
+  }
+  // outputChanged still compares narLong with "whole". Frame buzz adds its checkbox on that same line.
+  // An automatic Pieces is the default, so it is masked here, and a debuzz term on that line still counts.
+  (function () {
+    var raw = outputChanged;
+    outputChanged = function () {
+      var el = $("narLong");
+      var mask = el && el.dataset.picked !== "1" && el.value === longDefault() && el.value !== "whole";
+      if (!mask) return raw();
+      var saved = el.value;
+      el.value = "whole";
+      try { return raw(); }
+      finally { el.value = saved; }
+    };
+  })();
   // HERESY 1169: Songs × Sounds beside Generate, and how many takes that makes
   function paintCounts() {
     // HERESY 2137 (the audit of 06.11.2026): loaded codes render one song whatever Probes says (queueVersions), so the count says one and the slider
@@ -1449,6 +1542,7 @@
     store("yue2.output", null);
     $("debuzz").checked = true;                         // the 25 Hz buzz out; not on the Long songs line
     paintOutputDefaults();
+    if ($("narLong")) $("narLong").dataset.picked = "";   // the last paintOutput may move Whole to Pieces
     // HERESY 1168 (Viktor 07.10.2026: «Reset output не обнуляет выбор резолвера»): the solver back to midpoint too
     $("odeSolver").value = "multistep";                 // HERESY 1710: AB2 the default now (Midpoint before)
     $("odeSolver").dispatchEvent(new Event("change", { bubbles: true }));
@@ -2041,7 +2135,7 @@
     body.vae = selectedVae();
     if ($("odeSolver").value !== "midpoint") body.solver = $("odeSolver").value;  // HERESY 1004
     if ($("narDecode").value === "ladder") body.nar_ladder = true;   // HERESY 1768: the decode ladder, experimental, the Creator's own
-    if ($("narLong").value === "pieces") body.nar_pieces = true;     // HERESY 2509: past one window in pieces, experimental; whole otherwise
+    body.nar_pieces = $("narLong").value === "pieces";   // Whole sends false, so an omitted field on /synth is not read as this choice. Left out, the engine joins only when the length is past one window
     if (STATE.sliderChoice.length) {
       body.sliders = slidersBody();             // HERESY 1166: with each one's curve, where it is not flat
     }
@@ -2723,7 +2817,8 @@
     else { $("odeSteps").value = String(engineSteps()); syncStepsRange(); }   // HERESY 1710: a request without steps was made at the engine's
     $("odeSolver").value = ["midpoint", "multistep", "heun", "euler"].indexOf(req.solver) >= 0 ? req.solver : "midpoint";
     $("narDecode").value = req.nar_ladder === true ? "ladder" : "standard";   // HERESY 1768: a take's own, the draft's, a profile's
-    $("narLong").value = req.nar_pieces === true ? "pieces" : "whole";         // HERESY 2509: the same
+    $("narLong").value = req.nar_pieces === true ? "pieces" : "whole";         // a saved choice, not overwritten by the long-song default
+    $("narLong").dataset.picked = "1";
     if (typeof req.duration === "number") $("maxLength").value = round(req.duration, 3);
     $("variations").value = typeof req.synth_batch_size === "number" ? Math.max(1, Math.min(9, req.synth_batch_size)) : 1;
     if (FORMAT_LABELS[req.output_format]) $("outFormat").value = req.output_format;
@@ -3478,7 +3573,7 @@
       // HERESY 2433 (Viktor 12.11.2026: «K: не будем браковать сразу, а предупреждать»): a score without its key line is sung as written, and said
       if (data.score_warning && !job.lost) toastOnce(job.id + ":nokey", "No key line in the score: sung as written", "warn");
       // HERESY 2509: a song the window ended, not the song itself: said, with the way past it
-      if (data.window_held && !job.lost) toastOnce(job.id + ":window", tr("Held whole at {0}: one window of the sound half ends there. Longer: Long songs · Pieces (experimental)").replace("{0}", clock(data.window_held)), "warn");
+      if (data.window_held && !job.lost) toastOnce(job.id + ":window", tr("Held whole at {0}: one window of the sound half ends there. Choose Pieces to run the music to Max length and join the sound.").replace("{0}", clock(data.window_held)), "warn");
       // Only jump to the new song if the run is what you were looking at;
       // opening it never cuts off a song that is playing.
       if (watching) openTake(job.takes[0]);
@@ -6232,7 +6327,7 @@
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
       cell("Free tempo", "Free tempo", rq.free_tempo === true ? tr("on") : "\u2014", "") +   // HERESY 1416 («off» is Direct's name in the catalogs)
       cell("Sound decode", "Sound decode", rq.nar_ladder === true ? tr("Ladder · experimental") : "\u2014", "") +   // HERESY 1768
-      cell("Long songs", "Long songs", rq.nar_pieces === true ? tr("Pieces · experimental") : "\u2014", "") +   // HERESY 2509
+      cell("Long songs", "Long songs", longSongLabel(rq), "") +
       cell("Chords", "Chords", rq.harmony ? tr(HARMONY_NAMES[harmonyLevelOf(rq.harmony)] || "custom") : "\u2014", "");   // HERESY 1607
     return '<div class="meta-row trio medcard">' + column("Score Planner", '<dl class="meta-rows">' + plan + "</dl>") +
       column("Music Tokens", '<dl class="meta-rows">' + mus + "</dl>") + column("The run", '<dl class="meta-rows">' + run + "</dl>") + "</div>";

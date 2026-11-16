@@ -130,8 +130,9 @@ struct Yue2Request {
     int   instrumental;  // -1
     bool  free_tempo;  // HERESY 1416: the music stage reads the score without its tempo (Q: lines and [Q:…] fields)
     bool  nar_ladder;  // HERESY 1768: the sound half in even pieces of about 20 s, each hearing 2 s past its edges (experimental)
-    bool  nar_pieces;  // HERESY 2509: a song longer than one window of the sound half sung on and solved in pieces (2352's seam, experimental);
-                       // false: the song is held to one window, whole
+    bool  nar_pieces;  // HERESY 2509: a song longer than one window of the sound half sung on and solved in pieces (2352's seam);
+                       // false, and the request said so: the song is held to one window, whole
+    bool  nar_pieces_set;  // the request said nar_pieces, true or false. Left out is not a false: the pipeline joins when the asked length is past one window
     int   vocal_octave;  // HERESY 1743: a score the model plans whole has its Vocal line moved by this many octaves before it is sung (−3…3; 0: as planned)
 
     // output normalization percentile control, the peak being the

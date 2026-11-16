@@ -1285,6 +1285,10 @@ try { (function (v, f) { if (v !== "off" && v !== "rooms" && !(window.matchMedia
                 <span class="label" data-head="ABC notation, followed in Full plan and Melody only">Score</span>
                 <textarea id="abc" rows="8" spellcheck="false" class="mono" placeholder="X:1&#10;L:1/8&#10;M:4/4&#10;K:C"></textarea>
               </label>
+              <div class="dv-actions">
+                <button type="button" class="btn ghost small" id="meterRetry" data-tip="Each lyric line's syllables against the notes of the vocal line. A section off by more than two is sung again.">Match the melody</button>
+                <span class="row-hint mono" id="meterState"></span>
+              </div>
               <p class="row-hint score-guard" id="scoreGuard" hidden></p>
               <!-- HERESY 1609: the engine's abc_continue (1608) -->
               <label class="check opening-check" data-tip="The score in the box is only an opening: a few bars you played on the roll or a MIDI keyboard, hummed and written from the sound, or typed. The model plans the rest of the song on from it, in its key and meter, and the whole score, your opening first, is sung. Full plan or Melody only. After Mothersuperior's hum-to-song, through timoncool's yue2.cpp"><input type="checkbox" id="abcOpening" /> <span><strong>Only the opening</strong>: the model writes the rest of the song on from it</span></label>

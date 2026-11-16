@@ -352,6 +352,11 @@ def handle(method, path, query, body, headers, ctx):
         for k in ("abc", "loras", "vae", "steps", "solver", "cfg_scale", "cfg_lyrics"):
             if data.get(k) is not None:
                 req[k] = data[k]
+        if data.get("cfg_lyrics") is not None:
+            try:
+                req["cfg_lyrics"] = float(data["cfg_lyrics"])
+            except (TypeError, ValueError):
+                return 400, {"error": "cfg_lyrics must be a number"}
         # debuzz defaults on, beside exclude_styles: a WAV take is cleaned, and audio.raw.wav keeps the decoder's peak-whole file.
         # false leaves it raw. An MP3 is never cleaned. debuzz true on an MP3 is the ask, not a claim that the file was cleaned.
         if "debuzz" in data and not isinstance(data["debuzz"], bool):

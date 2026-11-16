@@ -1098,6 +1098,22 @@
   // it, red far past; an empty Lyrics guidance lit by the Guidance it follows
   var CFG_ZONES = { cfg: [1, 4, 4.6], cfgLyrics: [1, 2.6, 3] };
   var LYRICS_CFG = "2.2";                                // the lyrics' own beside the default 1.6: his 1.6 / 2.2 kept the words (12.10.2026)
+  var LYRICS_CFG_BY = { "RS-TW": "2.4", "RS-FW": "2.2" }; // lab/cfg_lyrics_sweep.py: TW is pulled harder, both under 2.6
+  function lyricsCfgDefault() {
+    var model = (STATE.settings && STATE.settings.model) || "";
+    if (model.indexOf("RS-TW") >= 0) return LYRICS_CFG_BY["RS-TW"];
+    if (model.indexOf("RS-FW") >= 0) return LYRICS_CFG_BY["RS-FW"];
+    return LYRICS_CFG;
+  }
+  function applyLyricsCfg() {
+    var el = $("cfgLyrics");
+    if (!el || el.dataset.touched) return;
+    var now = el.value.trim();
+    if (now !== "" && now !== "2.2" && now !== "2.4") return;
+    var next = lyricsCfgDefault();
+    if (el.value !== next) { el.value = next; cfgLights(); }
+  }
+  window.ruachLyricsCfg = lyricsCfgDefault;
   var CFG_SAYS = {
     cfg: ["Within Viktor's range for the music, 1.0 to 4.0: 4.0 the brightest, 3.0 just as bright, 1.6 the Studio's own",
       "Past 4.0: brighter still, and the music may begin to break; listen before you keep it", "Far past Viktor's range for the music (1.0 to 4.0): expect a broken take"],
@@ -1130,6 +1146,7 @@
   // HERESY 1167 (Viktor: «когда Backspace в цифровом поле до конца, обнуляется на одну цифру… это лучше делать при потере
   // фокуса курсора»): emptied, it keeps empty while you type; it shows its default again when you leave it (guardField)
   $("cfg").addEventListener("input", function () { this.dataset.touched = this.value.trim() ? "1" : ""; });
+  $("cfgLyrics").addEventListener("input", function () { this.dataset.touched = "1"; });
   ["cfg", "cfgLyrics"].forEach(function (id) { $(id).addEventListener("input", cfgLights); });   // HERESY 1400
   window.addEventListener("ruach-lang", cfgLights);
   all('input[name="cot"]').forEach(function (radio) { radio.addEventListener("change", fillCfg); });
@@ -1222,7 +1239,7 @@
     return all("input[data-group]").some(function (input) {
       if (input.dataset.group === "semantic" && input.dataset.key === "max_tokens") return false;   // the song's length: Max length's, not a knob's
       return Number(input.value) !== round(samplingDefault(input.dataset.group, input.dataset.key), 6);
-    }) || !!$("cfg").dataset.touched || $("cfgLyrics").value.trim() !== LYRICS_CFG;   // HERESY 1400: its own default is 2.2
+    }) || !!$("cfg").dataset.touched || $("cfgLyrics").value.trim() !== lyricsCfgDefault();   // HERESY 1400: the backbone's own default
   }
   $("resetSampling").addEventListener("click", function () {
     askReset(samplingChanged(), "Reset sampling to the defaults?\n\nThe values set here now are kept nowhere else.").then(function (ok) {
@@ -1231,7 +1248,8 @@
         input.value = round(samplingDefault(input.dataset.group, input.dataset.key), 6);
       });
       $("cfg").dataset.touched = "";
-      $("cfgLyrics").value = LYRICS_CFG;                 // HERESY 1397, 1400: apart from the start
+      $("cfgLyrics").dataset.touched = "";
+      $("cfgLyrics").value = lyricsCfgDefault();         // HERESY 1397, 1400: the backbone's own, apart from the start
       $("cfg").value = "";
       fillCfg();
       syncShape();
@@ -1868,7 +1886,8 @@
   });
   function newSong() {
     ["title", "titleVersion", "style", "excludeStyles", "lyrics", "abc", "lmSeed", "soundSeed", "cfg", "cfgLyrics"].forEach(function (id) { if ($(id)) $(id).value = ""; });   // HERESY 1614: the version too   // HERESY 1397
-    $("cfgLyrics").value = LYRICS_CFG;                   // HERESY 1400: a new song starts with the two apart
+    $("cfgLyrics").dataset.touched = "";
+    $("cfgLyrics").value = lyricsCfgDefault();           // HERESY 1400: a new song starts at the backbone's own
     setCot("full");                                   // HERESY 1169 · 1253 (Viktor 08.10.2026: «Full as the default»; 1167 had Direct)
     $("instrumental").checked = false;
     setVocalOctave(0);                                // HERESY 2348: the planned Vocal line as the model writes it
@@ -2496,6 +2515,38 @@
   function keepScoreOpen() { if (currentCot() === "full" && $("abc").value.trim()) $("scoreDrawer").open = true; }
   function scoreSays() { if (window.YueLoras && YueLoras.scoreSays) YueLoras.scoreSays(); }   // HERESY 1623
   $("abc").addEventListener("input", function () { keepScoreOpen(); paintScoreGuard(); scoreSays(); });
+  if ($("meterRetry")) $("meterRetry").addEventListener("click", function () {
+    var say = $("meterState");
+    function set(t, bad) { if (!say) return; say.textContent = t || ""; say.classList.toggle("is-bad", !!bad); }
+    if (!STATE.take) { set("Open a take first", true); return; }
+    var btn = $("meterRetry");
+    btn.disabled = true;
+    set("Comparing syllables and the melody…");
+    fetch("/lab/meter/retry", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: STATE.take.name, lyrics: $("lyrics").value, abc: $("abc").value }) })
+      .then(function (r) { return r.json().then(function (b) { if (!r.ok) throw new Error(b.error || r.status); return b; }); })
+      .then(function (b) {
+        function ask() {
+          return fetch("/lab/meter/retry?id=" + encodeURIComponent(b.id)).then(function (r) {
+            return r.json().then(function (st) {
+              if (!r.ok) throw new Error(st.error || r.status);
+              if (st.status === "queued" || st.status === "running") return new Promise(function (res) { setTimeout(res, 2000); }).then(ask);
+              return st;
+            });
+          });
+        }
+        return ask();
+      })
+      .then(function (st) {
+        var names = st.redo || [];
+        var line = names.length ? names.join(", ") + " sung again" : (st.why || "the lines sit on the melody");
+        if (st.take && st.take !== STATE.take.name) line += " · " + st.take;
+        set(st.status === "failed" ? (st.error || "Could not") : line, st.status === "failed");
+        (st.passes || []).forEach(function (p) { if (p.section && window.ruachFollowSection) window.ruachFollowSection(p.section); });
+      })
+      .catch(function (e) { set(e.message || String(e), true); })
+      .then(function () { btn.disabled = false; });
+  });
   all('input[name="cot"]').forEach(function (radio) { radio.addEventListener("change", function () { keepScoreOpen(); paintScoreGuard(); scoreSays(); }); });
   $("scoreDrawer").addEventListener("toggle", function () {
     if (this.open || currentCot() !== "full" || !$("abc").value.trim()) return;
@@ -5317,6 +5368,7 @@
   function paintSettings(settings, force) {
     var newContext = !STATE.settings || STATE.settings.max_seq !== settings.max_seq;   // HERESY 2509: the window's note follows it
     STATE.settings = settings;
+    applyLyricsCfg();
     if (newContext) setTimeout(paintOutput, 0);
     paintModelPick(settings);
     // A background refresh must not wipe fields you are still editing; Save repaints them.

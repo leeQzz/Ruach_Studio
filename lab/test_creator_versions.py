@@ -121,5 +121,23 @@ with tempfile.TemporaryDirectory() as t:
     b = cv.post(t, {"op": "keep", **w, "why": "<bad>!!", "params": "not a dict"})
     check("a strange why is cleaned, knobs that are not a dict are none", b["versions"][-1]["why"] == "bad" and b["versions"][-1]["params"] == {}, b["versions"][-1])
 
+# excluded styles are prompt text: another exclusion is another version, and a backup brings it back
+with tempfile.TemporaryDirectory() as t:
+    w = {"title": "Есаул", "style": "folk", "lyrics": "[verse]\nа", "abc": "X:1", "params": {"cfg_scale": 3.2}}
+    b = cv.post(t, {"op": "keep", **w, "exclude_styles": "drones, beats", "takes": []})
+    check("an exclusion is kept with the words", b["versions"][-1]["exclude_styles"] == "drones, beats" and b["versions"][-1]["params"]["cfg_scale"] == 3.2, b["versions"][-1])
+    b = cv.post(t, {"op": "keep", **w, "exclude_styles": "drones, beats", "takes": ["t1"]})
+    check("the same exclusion again is no new version", len(b["versions"]) == 1 and b["versions"][0]["takes"] == ["t1"], b["versions"])
+    b = cv.post(t, {"op": "keep", **w, "exclude_styles": "drums", "takes": []})
+    check("another exclusion is another version", len(b["versions"]) == 2 and b["versions"][-1]["exclude_styles"] == "drums", [v.get("exclude_styles") for v in b["versions"]])
+    b = cv.post(t, {"op": "keep", **dict(w, exclude_styles=""), "takes": []})
+    check("clearing the exclusion is another version, stored empty", len(b["versions"]) == 3 and b["versions"][-1]["exclude_styles"] == "", b["versions"][-1].get("exclude_styles"))
+with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+    cv.post(Path(a), {"op": "keep", "title": "Крик", "style": "s", "lyrics": "l", "exclude_styles": "drones", "takes": []})
+    exp = writer.post(Path(a), {"op": "export"})
+    writer.post(Path(b), {"op": "import", "backup": exp})
+    got = cv.get(Path(b), title="Крик")["versions"][0].get("exclude_styles")
+    check("a backup brings the exclusion back", got == "drones", got)
+
 print("test_creator_versions:", "FAILED " + ", ".join(bad) if bad else "all passed")
 sys.exit(1 if bad else 0)

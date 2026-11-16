@@ -195,6 +195,18 @@ inline NarPiecePlan nar_plan_ladder(int T_lat, int window, int target, int margi
     return butt;
 }
 
+// The first sound window is already in the cache when the music half sealed it
+// (kept == the window length). A ladder never seals: every piece, joined or
+// butted, is read again, or the first window attends the next music code
+// instead of the end token. A sealed seam (not a ladder) stays in the cache.
+// Replay and sliders also read the window again; the cache is not theirs.
+inline bool nar_reread_first_window(bool replay, bool sliders, bool ladder, int chunks) {
+    if (replay || sliders) {
+        return true;
+    }
+    return ladder && chunks > 1;
+}
+
 inline float nar_seam_ramp(float u) {
     if (u <= 0.0f) {
         return 0.0f;

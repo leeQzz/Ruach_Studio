@@ -1457,7 +1457,9 @@ static bool pipeline_generate(Yue2Pipeline *          p,
             sequence.push_back(YUE2_MUSIC_END);
             // With sliders the cache the AR decode left carries their steer, so
             // the first chunk re-prefills the whole sequence without them
-            const int kept = start > 0 ? prefix_len : ((replay || sliders_used || (lad && !seam)) ? 0 : ar_len);   // 1768: a ladder reads its first window again (2352: a seam's is sealed)
+            // 1768: a ladder reads its first window again, joined or butted (a seam's is sealed, 2352)
+            const int kept = start > 0 ? prefix_len
+                                       : (nar_reread_first_window(replay, sliders_used, r.nar_ladder, chunks) ? 0 : ar_len);
             if (kept < ar_len) {
                 nar_hold.reset();
                 nar                = nullptr;

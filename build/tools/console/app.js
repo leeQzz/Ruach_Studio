@@ -1389,26 +1389,75 @@
 
   $("outFormat").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
   $("mp3Bitrate").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
-  ["odeSteps", "maxLength"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
+  ["odeSteps", "maxLength", "style", "lyrics", "abc"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
   $("narDecode").addEventListener("change", paintOutput);
   $("narLong").addEventListener("change", function () {
     this.dataset.picked = "1";   // an explicit Whole or Pieces, not the automatic default
     paintOutput();
   });
-  // One window of the sound half on this engine's context, for a long prompt and a short one (6000 and 1000 rows: about the
-  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days); the pipeline's own count, (context - prefix - 3) / 2 frames.
-  // win[0] is the long prompt (the shorter window, the one a scored song hits first); win[1] is the short prompt.
+  // One window of the sound half: (context - prefix - 3) / 2 frames. 6000 and 1000 rows are about the
+  // 95th and 5th percentiles of the prefixes of 407 songs of 30 days. The request in the form can be longer
+  // than that sample; byte-level BPE is at most one token a byte, so the text's bytes are a ceiling on its
+  // prefix and the window we trust is the shorter of the sample and that ceiling.
+  function contextRows() {
+    return STATE.settings && +STATE.settings.max_seq ? +STATE.settings.max_seq : fullContext();
+  }
+  function windowFrames(prefix) {
+    return Math.max(0, Math.floor((contextRows() - prefix - 3) / 2));
+  }
+  function utf8Bytes(text) {
+    var bytes = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c < 0x80) bytes += 1;
+      else if (c < 0x800) bytes += 2;
+      else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < text.length) { bytes += 4; i++; }
+      else bytes += 3;
+    }
+    return bytes;
+  }
+  function prefixGuessFrom(style, lyrics, abc) {
+    var bytes = utf8Bytes([style || "", lyrics || "", abc || ""].join("\n")) + 80;
+    return bytes > 6000 ? bytes : 6000;
+  }
+  function prefixGuess() {
+    return prefixGuessFrom($("style") && $("style").value, $("lyrics") && $("lyrics").value, $("abc") && $("abc").value);
+  }
   function wholeWindow() {
-    var ctx = STATE.settings && +STATE.settings.max_seq ? +STATE.settings.max_seq : fullContext();
-    var at = function (prefix) { return Math.max(0, Math.floor((ctx - prefix - 3) / 2) / FRAME_RATE); };
-    return [at(6000), at(1000)];
+    return [windowFrames(prefixGuess()) / FRAME_RATE, windowFrames(1000) / FRAME_RATE];
+  }
+  // What the take card may call the run. A supplied stream (a replay, or frames kept from a moment) is solved
+  // as it stands: past one window the sound is joined even when nar_pieces was left off, so that run is not "Whole".
+  function suppliedFrames(rq) {
+    var n = 0;
+    ["semantic_tokens", "semantic_keep"].forEach(function (k) {
+      if (!rq || !rq[k]) return;
+      var c = String(rq[k]).split(",").filter(function (t) { return t.trim(); }).length;
+      if (c > n) n = c;
+    });
+    return n;
+  }
+  function longSongLabel(rq) {
+    if (rq && rq.nar_pieces === true) return tr("Pieces · joined");
+    var n = suppliedFrames(rq);
+    if (n > 0) {
+      var generous = windowFrames(48);   // the instruction and the specials: the longest one window can be
+      if (generous > 0 && n > generous) return tr("Pieces · joined");
+      // The text's bytes overestimate its prefix, so this window is a floor. Past it, the stream may have been joined.
+      var own = windowFrames(prefixGuessFrom(rq && rq.style, rq && rq.lyrics, rq && rq.abc));
+      if (!(own > 0) || n > own) return "\u2014";
+    }
+    return tr("Whole · one window");
   }
   // test-nar-seam holds (weights sum to 1, no stub tail, every window fits). While it does, a Max length past one
   // window starts on Pieces so the music is not cut. Set this false if those checks fail: the page then stays on Whole and warns.
   var NAR_SEAM_DEFAULT_PIECES = true;
   function pastOneWindow() {
     var length = parseFloat($("maxLength").value), win = wholeWindow();
-    return isFinite(length) && win[0] > 0 && length > win[0];
+    if (!isFinite(length) || length <= 0) return false;
+    // No trusted window (the prompt's own ceiling fills the context) is already past one window.
+    if (!(win[0] > 0)) return true;
+    return length > win[0];
   }
   function longDefault() {
     return NAR_SEAM_DEFAULT_PIECES && pastOneWindow() ? "pieces" : "whole";
@@ -6210,7 +6259,7 @@
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
       cell("Free tempo", "Free tempo", rq.free_tempo === true ? tr("on") : "\u2014", "") +   // HERESY 1416 («off» is Direct's name in the catalogs)
       cell("Sound decode", "Sound decode", rq.nar_ladder === true ? tr("Ladder · experimental") : "\u2014", "") +   // HERESY 1768
-      cell("Long songs", "Long songs", rq.nar_pieces === true ? tr("Pieces · joined") : tr("Whole · one window"), "") +
+      cell("Long songs", "Long songs", longSongLabel(rq), "") +
       cell("Chords", "Chords", rq.harmony ? tr(HARMONY_NAMES[harmonyLevelOf(rq.harmony)] || "custom") : "\u2014", "");   // HERESY 1607
     return '<div class="meta-row trio medcard">' + column("Score Planner", '<dl class="meta-rows">' + plan + "</dl>") +
       column("Music Tokens", '<dl class="meta-rows">' + mus + "</dl>") + column("The run", '<dl class="meta-rows">' + run + "</dl>") + "</div>";

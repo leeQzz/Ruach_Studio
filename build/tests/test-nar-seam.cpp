@@ -205,6 +205,13 @@ int main() {
     check(nar_seam_weight_error(eight, long_song) < 1.0e-4f, "eight minutes of weights sum to 1 at every frame",
           std::to_string((double) nar_seam_weight_error(eight, long_song)));
 
+    // A ladder does not seal its first window. Butted pieces (the seam turned off) still have to be read again.
+    check(nar_reread_first_window(false, false, true, 3), "a butted ladder reads its first window again", "");
+    check(nar_reread_first_window(false, false, true, 2), "a joined ladder reads its first window again", "");
+    check(!nar_reread_first_window(false, false, true, 1), "one ladder piece keeps the cache", "");
+    check(!nar_reread_first_window(false, false, false, 4), "a sealed seam stays in the cache", "");
+    check(nar_reread_first_window(true, false, false, 4), "a replay reads the window again", "");
+
     printf("%s\n", g_failed ? "FAILED" : "all cases hold");
     return g_failed ? 1 : 0;
 }

@@ -42,7 +42,8 @@ def call(path, body=None, timeout=60):
 @mcp.tool()
 def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "", duration: float = 0,
                   instrumental: bool = False, workspace: str = "", music_seed: int | None = None,
-                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True) -> dict:
+                  sound_seed: int | None = None, midi_file: str = "", midi_key: str = "", wait: bool = True,
+                  debuzz: bool = True) -> dict:
     """Make a song with YuE2 on the studio's GPU. style: language, genre, voice, instruments, tempo, in plain words.
     lyrics: with section tags on their own lines ([Verse], [Chorus], [Bridge], [Outro]). mode: direct (fastest), full
     (a score first: melody and chords), melody; empty: direct, or melody with a MIDI file. duration in seconds (up to
@@ -50,9 +51,12 @@ def generate_song(style: str, lyrics: str = "", title: str = "", mode: str = "",
     in. midi_file: a standard MIDI file on this machine whose notes become the song's melody (the top track sung, the
     second played, one line a voice); the answer's "score" says how the studio read it (key, tempo, notes kept and
     dropped). midi_key: the key to write it in (Em, Bb…) when the file has none and the studio's guess would not do.
+    debuzz: true (the default) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the decoder's
+    peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it.
     With wait, returns the finished take (a 3-minute song takes one to two minutes); without, the job to poll with
     job_status."""
-    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental}
+    body = {"style": style, "lyrics": lyrics, "title": title, "duration": duration, "instrumental": instrumental,
+            "debuzz": debuzz}
     if mode:
         body["mode"] = mode
     if midi_file:                                       # HERESY 1145

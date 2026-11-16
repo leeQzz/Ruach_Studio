@@ -51,6 +51,7 @@ void request_init(Yue2Request * r) {
     r->semantic_sampling = YUE2_SEMANTIC_SAMPLING;
 
     r->output_format = OUTPUT_FORMAT_WAV24;   // HERESY 1413 (Viktor 13.10.2026: «Дефолт движка везде выставь на wav 24bit»)
+    r->debuzz        = true;   // the 25 Hz frame buzz out of a WAV take; false keeps the decoder's peak-whole file
     r->mp3_bitrate   = 128;
 
     // Local additions (console): take title, decoder, sliders, LoRAs, score-only runs, parent take
@@ -345,6 +346,9 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     if ((v = yyjson_obj_get(obj, "output_format")) && yyjson_is_str(v)) {
         r->output_format = yy_str(v);
     }
+    if ((v = yyjson_obj_get(obj, "debuzz")) && yyjson_is_bool(v)) {
+        r->debuzz = yyjson_get_bool(v);
+    }
     if ((v = yyjson_obj_get(obj, "mp3_bitrate")) && yyjson_is_int(v)) {
         r->mp3_bitrate = yyjson_get_int(v);
     }
@@ -571,6 +575,9 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
     }
     if (!sparse || r->output_format != d.output_format) {
         yyjson_mut_obj_add_strncpy(doc, root, "output_format", r->output_format.c_str(), r->output_format.size());
+    }
+    if (!sparse || r->debuzz != d.debuzz) {
+        yyjson_mut_obj_add_bool(doc, root, "debuzz", r->debuzz);
     }
     if (!sparse || r->peak_clip != d.peak_clip) {
         yyjson_mut_obj_add_int(doc, root, "peak_clip", r->peak_clip);

@@ -1451,6 +1451,188 @@ static void take_title_lyrics(const std::string & dir, const std::string & name,
     }
 }
 
+// A shell word. The paths are the server's own (the take folder, lab/debuzz.py); quoting keeps a space in them a space.
+static std::string shell_quote(const std::string & s) {
+#ifdef _WIN32
+    std::string o = "\"";
+    for (char c : s) {
+        if (c == '"') {
+            o += "\\\"";
+        } else {
+            o += c;
+        }
+    }
+    return o + "\"";
+#else
+    std::string o = "'";
+    for (char c : s) {
+        if (c == '\'') {
+            o += "'\\''";
+        } else {
+            o += c;
+        }
+    }
+    return o + "'";
+#endif
+}
+
+// lab/debuzz.py, beside this process or above its working directory (start.sh runs the engine from the repo root).
+// RUACH_DEBUZZ names the script when it lives somewhere else.
+static std::string debuzz_script() {
+    if (const char * env = getenv("RUACH_DEBUZZ")) {
+        if (*env && std::filesystem::is_regular_file(env)) {
+            return env;
+        }
+    }
+    std::error_code          ec;
+    std::filesystem::path    cwd = std::filesystem::current_path(ec);
+    for (int i = 0; i < 6 && !cwd.empty(); i++) {
+        std::filesystem::path p = cwd / "lab" / "debuzz.py";
+        if (std::filesystem::is_regular_file(p, ec)) {
+            return p.string();
+        }
+        std::filesystem::path parent = cwd.parent_path();
+        if (parent == cwd) {
+            break;
+        }
+        cwd = parent;
+    }
+    return "";
+}
+
+// The Studio's venv when it sits next to lab/ (start.sh: $ROOT/.venv/bin/python, else python3). RUACH_PYTHON wins.
+static std::string python_for(const std::string & script) {
+    if (const char * e = getenv("RUACH_PYTHON")) {
+        if (*e) {
+            return e;
+        }
+    }
+    if (const char * e = getenv("YUE2_PYTHON")) {
+        if (*e) {
+            return e;
+        }
+    }
+    std::filesystem::path root = std::filesystem::path(script).parent_path().parent_path();
+#ifdef _WIN32
+    std::filesystem::path venv = root / ".venv" / "Scripts" / "python.exe";
+    if (std::filesystem::is_regular_file(venv)) {
+        return venv.string();
+    }
+    return "python";
+#else
+    std::filesystem::path venv = root / ".venv" / "bin" / "python";
+    if (std::filesystem::is_regular_file(venv)) {
+        return venv.string();
+    }
+    return "python3";
+#endif
+}
+
+// One bool and optional strings on meta.json. The library list copies meta, so the page sees them.
+static void meta_debuzz(const std::string & dir, bool done, const char * raw, const char * note) {
+    std::string  path = dir + "/meta.json";
+    std::string  text = read_file(path);
+    yyjson_doc * meta = yyjson_read(text.c_str(), text.size(), 0);
+    if (!meta) {
+        return;
+    }
+    yyjson_mut_doc * doc  = yyjson_doc_mut_copy(meta, NULL);
+    yyjson_mut_val * root = yyjson_mut_doc_get_root(doc);
+    yyjson_doc_free(meta);
+    yyjson_mut_obj_remove_key(root, "debuzzed");
+    yyjson_mut_obj_add_bool(doc, root, "debuzzed", done);
+    yyjson_mut_obj_remove_key(root, "raw");
+    yyjson_mut_obj_remove_key(root, "debuzz_note");
+    if (raw && *raw) {
+        yyjson_mut_obj_add_strcpy(doc, root, "raw", raw);
+    }
+    if (note && *note) {
+        yyjson_mut_obj_add_strcpy(doc, root, "debuzz_note", note);
+    }
+    char * json = yyjson_mut_write(doc, YYJSON_WRITE_PRETTY, NULL);
+    if (json) {
+        write_file_synced(path, json);
+        free(json);
+    }
+    yyjson_mut_doc_free(doc);
+}
+
+// After library_save: a WAV take is debuzzed in place when the request asks (the default). The decoder's
+// peak-whole file stays as audio.raw.wav. The cleaned WAV replaces audio.wav and listen.flac, and is
+// returned so the job's own result matches the file. Empty: the take was left as saved (off, MP3, or the
+// cure could not run). The library lock is held only around the swap, not across the Python run.
+static std::string library_debuzz(const std::string & name, const Yue2Request & replay, bool is_mp3) {
+    if (!replay.debuzz) {
+        return "";
+    }
+    std::string dir = g_outputs_dir + "/" + name;
+    if (is_mp3) {
+        fprintf(stderr, "[Library] %s: debuzz left off (an MP3 is already encoded; a WAV keeps the raw file beside the cleaned one)\n",
+                name.c_str());
+        meta_debuzz(dir, false, "", "mp3");
+        return "";
+    }
+    std::string script = debuzz_script();
+    if (script.empty()) {
+        fprintf(stderr, "[Library] %s: debuzz skipped, lab/debuzz.py not found (set RUACH_DEBUZZ)\n", name.c_str());
+        meta_debuzz(dir, false, "", "no script");
+        return "";
+    }
+    std::string wav = dir + "/audio.wav";
+    std::string raw = dir + "/audio.raw.wav";
+    std::string tmp = dir + "/audio.debuzz.wav";
+    const char * sub = "PCM_24";
+    if (replay.output_format == "wav16") {
+        sub = "PCM_16";
+    } else if (replay.output_format == "wav32") {
+        sub = "FLOAT";
+    }
+    std::string cmd = shell_quote(python_for(script)) + " " + shell_quote(script) + " " + shell_quote(wav) + " " +
+                      shell_quote(tmp) + " 0.8 2000 50 3 " + std::to_string(YUE2_HOP) + " " + std::to_string(YUE2_SAMPLE_RATE) +
+                      " " + sub + " 1>&2";
+    fprintf(stderr, "[Library] %s: debuzz\n", name.c_str());
+    int rc = std::system(cmd.c_str());
+    std::error_code ec;
+    auto            sz = std::filesystem::is_regular_file(tmp, ec) ? std::filesystem::file_size(tmp, ec) : 0;
+    if (rc != 0 || ec || sz < 64) {
+        std::filesystem::remove(tmp, ec);
+        fprintf(stderr, "[Library] %s: debuzz failed (%d); the take stays as the decoder wrote it\n", name.c_str(), rc);
+        meta_debuzz(dir, false, "", "failed");
+        return "";
+    }
+    std::string cleaned;
+    {
+        std::lock_guard<std::mutex> lock(mtx_library);
+        std::filesystem::remove(raw, ec);   // a previous raw, if a save is tried again; missing is not a failure
+        ec.clear();
+        std::filesystem::rename(wav, raw, ec);
+        if (ec) {
+            std::string why = ec.message();
+            std::filesystem::remove(tmp, ec);
+            fprintf(stderr, "[Library] %s: debuzz could not keep the raw wav: %s\n", name.c_str(), why.c_str());
+            meta_debuzz(dir, false, "", "raw");
+            return "";
+        }
+        ec.clear();
+        std::filesystem::rename(tmp, wav, ec);
+        if (ec) {
+            std::error_code back;
+            std::filesystem::rename(raw, wav, back);
+            fprintf(stderr, "[Library] %s: debuzz could not replace the wav; %s\n", name.c_str(),
+                    back ? "the raw file could not be put back" : "the raw file is back");
+            meta_debuzz(dir, false, "", "replace");
+            return "";
+        }
+        cleaned = read_file(wav);
+        std::string title, lyrics;
+        take_title_lyrics(dir, name, title, lyrics);
+        write_listen_flac(dir, cleaned, title, lyrics);
+        meta_debuzz(dir, true, "audio.raw.wav", "");
+    }
+    fprintf(stderr, "[Library] %s: debuzzed, raw kept as audio.raw.wav\n", name.c_str());
+    return cleaned;
+}
+
 // Local addition: saved copies are named after the song ("Last Train Home.wav"): the title without the
 // characters Windows refuses in a file name, an ASCII fallback for old clients and the full name in UTF-8.
 // by_title false (the page's "names=library") keeps the library name, with its date and time.
@@ -2509,6 +2691,10 @@ static void decode_job(std::shared_ptr<Job> job, const Yue2Request & request) {
         if (!name.empty()) {
             job->takes.push_back(name);
             latents_save(g_outputs_dir + "/" + name, song);
+            std::string cleaned = library_debuzz(name, replay, is_mp3);
+            if (!cleaned.empty()) {
+                audio_parts[0] = std::move(cleaned);
+            }
         }
     }
     active_job_set(nullptr);
@@ -2732,6 +2918,10 @@ static void run_job(std::shared_ptr<Job> job, Yue2Request request) {
             if (!name.empty()) {
                 job->takes.push_back(name);
                 latents_save(g_outputs_dir + "/" + name, song);   // HERESY 1168: for another decoder, in seconds
+                std::string cleaned = library_debuzz(name, replay, is_mp3);
+                if (!cleaned.empty()) {
+                    audio_parts.back() = std::move(cleaned);
+                }
             }
         }
         latents.push_back(std::move(song.latents));
@@ -3553,7 +3743,18 @@ int main(int argc, char ** argv) {
                 res.set_content(json_string("error", "no such take"), "application/json");
                 return;
             }
-            std::string path = audio_file_of(g_outputs_dir + "/" + name);
+            std::string dir  = g_outputs_dir + "/" + name;
+            std::string path = audio_file_of(dir);
+            // debuzz on: audio.wav is the cleaned take; audio.raw.wav is the decoder's peak-whole file
+            if (req.get_param_value("raw") == "1") {
+                std::string kept = dir + "/audio.raw.wav";
+                if (!std::filesystem::is_regular_file(kept)) {
+                    res.status = 404;
+                    res.set_content(json_string("error", "this take has no raw file (debuzz was off, or it is an MP3)"), "application/json");
+                    return;
+                }
+                path = kept;
+            }
             bool        mp3  = path.size() > 4 && path.substr(path.size() - 4) == ".mp3";
             // Saved copies are named after the song, or the library name with names=library (local change)
             res.set_header("Content-Disposition", download_header("inline", g_outputs_dir + "/" + name, name, mp3 ? ".mp3" : ".wav",

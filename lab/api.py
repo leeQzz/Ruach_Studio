@@ -4,7 +4,7 @@ addresses only, HERESY 1114). One door for a script, a DAW, an agent: the engine
     GET  /api/v1                          what this is, and every route
     GET  /api/v1/openapi.json             the same as OpenAPI 3.1
     GET  /api/v1/health                   the engine, the lab, the cards (the guard's verdict)
-    POST /api/v1/songs                    make a song: {style, lyrics, title, mode, duration, min_seconds, abc | midi_b64, …} -> {job}
+    POST /api/v1/songs                    make a song: {style, lyrics, title, mode, duration, min_seconds, abc | midi_b64, debuzz, …} -> {job}
     POST /api/v1/score/from-midi          a MIDI file as a song's score, to see first: {midi_b64, key, ins} -> {abc, key, …}
     GET  /api/v1/jobs/ID                  its state; when done, the takes it made
     POST /api/v1/jobs/ID/cancel
@@ -147,7 +147,8 @@ def openapi():
     s, i, b, a = {"type": "string"}, {"type": "integer"}, {"type": "boolean"}, {"type": "array"}
     song = {"style": s, "lyrics": s, "title": s, "mode": {"type": "string", "enum": ["direct", "full", "melody"]},
             "instrumental": b, "duration": {"type": "number"}, "min_seconds": {"type": "number"}, "music_seed": i, "sound_seed": i, "abc": s, "loras": a,
-            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]}}
+            "vae": s, "workspace": s, "midi_b64": s, "midi_key": s, "midi_ins": {"type": "string", "enum": ["auto", "keep", "none"]},
+            "debuzz": b}
     return {"openapi": "3.1.0",
             "info": {"title": "Ruach Studio API", "version": VERSION,
                      "description": "Songs from words on this machine. Private networks only; a token when RUACH_API_TOKEN is set."},
@@ -155,7 +156,9 @@ def openapi():
             "paths": {
                 "/health": {"get": op("The engine, the lab and the cards")},
                 "/songs": {"post": op("Make a song; returns the job. A score (abc, or a MIDI file as midi_b64) makes mode melody "
-                                      "or full by itself; direct with a score is refused, as it would drop it", song)},
+                                      "or full by itself; direct with a score is refused, as it would drop it. "
+                                      "debuzz (default true) takes the VAE's 25 Hz frame buzz out of a WAV take and keeps the "
+                                      "decoder's peak-whole file as audio.raw.wav; false leaves the take as the decoder wrote it", song)},
                 "/score/from-midi": {"post": op("A MIDI file as a song's score, without making the song: the score and what "
                                                 "it was made of (the key and where it came from, the notes kept and dropped)",
                                                 {"midi_b64": s, "key": s, "ins": {"type": "string", "enum": ["auto", "keep", "none"]}})},
@@ -164,7 +167,8 @@ def openapi():
                 "/takes": {"get": op("The takes", params=[("workspace", "query", "string"), ("q", "query", "string"),
                                                          ("limit", "query", "integer"), ("offset", "query", "integer")])},
                 "/takes/{name}": {"get": op("One take: what it was made with, its marks", params=[("name", "path", "string")])},
-                "/takes/{name}/audio": {"get": op("The take's WAV (a redirect to the engine)", params=[("name", "path", "string")])},
+                "/takes/{name}/audio": {"get": op("The take's WAV (a redirect to the engine). ?raw=1 is the decoder's peak-whole file when debuzz kept one",
+                                                 params=[("name", "path", "string"), ("raw", "query", "string")])},
                 "/takes/{name}/marks": {"post": op("Like (1), dislike (-1), none (0); favourite; a note",
                                                    {"rating": i, "favorite": b, "note": s}, [("name", "path", "string")])},
                 "/takes/{name}/reaper": {"post": op("The take as a REAPER project", {"midi_b64": s}, [("name", "path", "string")])},
@@ -261,6 +265,10 @@ def handle(method, path, query, body, headers, ctx):
         for k in ("abc", "loras", "vae", "steps", "solver", "cfg_scale"):
             if data.get(k) is not None:
                 req[k] = data[k]
+        # debuzz defaults on: a WAV take is cleaned, and audio.raw.wav keeps the decoder's peak-whole file. false leaves it raw.
+        if "debuzz" in data and not isinstance(data["debuzz"], bool):
+            return 400, {"error": "debuzz is true or false"}
+        req["debuzz"] = data["debuzz"] if "debuzz" in data else True
         if data.get("workspace"):                        # HERESY 2284: a workspace the takes could not go into is refused before the job, not after it
             try:
                 col = ctx["collection"]
@@ -306,12 +314,13 @@ def handle(method, path, query, body, headers, ctx):
         if method == "GET" and not what:
             row = next((r for r in col.catalog(outputs, cfg())["takes"] if r["name"] == name), {})
             req = json.load(open(d / "request.json", encoding="utf-8")) if (d / "request.json").is_file() else {}
-            made = {k: req.get(k) for k in ("style", "lyrics", "abc", "cot", "duration", "lm_seed", "seed", "loras", "vae", "steps", "solver")}
+            made = {k: req.get(k) for k in ("style", "lyrics", "abc", "cot", "duration", "lm_seed", "seed", "loras", "vae", "steps", "solver", "debuzz")}
             art = ctx["art"]["info"](name) if ctx.get("art") else None
             return 200, dict(_row(row), request=made, audio=f"/api/v1/takes/{name}/audio",
                              artwork=f"/api/v1/takes/{name}/artwork" if art else None)
         if method == "GET" and what == "audio":
-            raise Redirect("/library/audio?name=" + urllib.parse.quote(name))
+            raw = "&raw=1" if str(query.get("raw") or "") in ("1", "true") else ""
+            raise Redirect("/library/audio?name=" + urllib.parse.quote(name) + raw)
         if method == "POST" and what == "marks":
             if "rating" in data:
                 col.collection_post(cfg(), outputs, {"op": "rate", "names": [name], "value": int(data["rating"])})

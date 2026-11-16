@@ -18,7 +18,7 @@ The full description, for tools that read it: `GET /api/v1/openapi.json` (OpenAP
 | POST | `/api/v1/jobs/ID/cancel` | stop it |
 | GET | `/api/v1/takes` | the takes, newest first: `?workspace=` `?q=` (title or note) `?limit=` `?offset=` |
 | GET | `/api/v1/takes/NAME` | one take: its marks, workspaces, and what it was made with (style, lyrics, score, seeds, adapters) |
-| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves) |
+| GET | `/api/v1/takes/NAME/audio` | its audio (a redirect to the file the engine serves). `?raw=1` is the decoder's peak-whole WAV when debuzz kept one (`audio.raw.wav`); 404 when the take has none |
 | POST | `/api/v1/takes/NAME/marks` | `{rating: 1 / -1 / 0, favorite: true/false, note: "…"}` |
 | POST | `/api/v1/takes/NAME/reaper` | the take as a REAPER project (see the guide's DAW tab); answers where to fetch the ZIP |
 | GET | `/api/v1/takes/NAME/artwork` | its artwork (a redirect to the JPEG, 768 px), 404 until it has one |
@@ -54,6 +54,7 @@ POST /api/v1/songs
 - `midi_b64`: a standard MIDI file, base64, as the song's melody (below). `midi_key`: the key to write it in when the file has none (`Em`, `Bb`, `F#m`…); `midi_ins`: `auto`, `keep` or `none` (below).
 - `duration`: seconds; left out, 180, or the MIDI file's own length.
 - Also passed on as they are: `loras`, `vae`, `steps`, `solver`, `cfg_scale`, `output_format` (WAV 24-bit unless asked otherwise).
+- `debuzz`: `true` by default. A WAV take is written with the decoder's 25 Hz frame buzz taken out of the highs (strength 0.8, the measured cure). `audio.wav` and the player's `listen.flac` are that cleaned file; `audio.raw.wav` beside them is the decoder's own peak-whole file. `false` leaves the take as the decoder wrote it, and nothing is kept beside it. An MP3 is already encoded and is left as it is. Anything other than `true` or `false` is `400`.
 - `workspace`: the take lands there when it is done.
 
 ### A melody as a MIDI file

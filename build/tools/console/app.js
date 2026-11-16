@@ -1376,6 +1376,8 @@
     var notes = [];
     // HERESY 1167: the music's ceiling is Max length itself now; the window is the other cap (1169: said in Max length's own tip)
     if (format === "wav32") notes.push("WAV 32 is raw float: peak clip is ignored.");
+    if (format === "mp3" && $("debuzz").checked) notes.push("Debuzz runs on a WAV. An MP3 stays as the decoder wrote it.");
+    if (!$("debuzz").checked) notes.push("Frame buzz stays: the take is the decoder's own, peaks whole.");
     var longOne = longNote();                         // HERESY 2509: said with its numbers, already in the page's language
     $("outHint").textContent = notes.map(tr).concat(longOne ? [longOne] : []).join(" ");
     syncMusicCeiling();                               // HERESY 1167: the music's Max length follows
@@ -1387,6 +1389,7 @@
   }
 
   $("outFormat").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
+  $("debuzz").addEventListener("change", paintOutput);
   $("mp3Bitrate").addEventListener("change", function () { saveOutputChoice(); paintOutput(); });
   ["odeSteps", "maxLength"].forEach(function (id) { $(id).addEventListener("input", paintOutput); });
   ["narLong", "narDecode"].forEach(function (id) { $(id).addEventListener("change", paintOutput); });   // HERESY 2509: the window's note follows
@@ -1432,10 +1435,11 @@
     return off("odeSteps", "steps") || off("maxLength", "duration") ||
       $("odeSolver").value !== "multistep" || $("outFormat").value !== "wav24" ||   // HERESY 1710: AB2 the default
       $("narDecode").value !== "standard" ||                                       // HERESY 1768: the whole-song decode the default
-      $("narLong").value !== "whole";                                              // HERESY 2509: whole, held to one window, the default
+      $("narLong").value !== "whole" ||                                            // HERESY 2509: whole, held to one window, the default
+      !$("debuzz").checked;                                                        // the 25 Hz buzz out, the default
   }
   $("resetOutput").addEventListener("click", function () {
-    askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
+    askReset(outputChanged(), "Reset the output to the defaults?\n\nWAV 24-bit, the 25 Hz buzz taken out, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " +
       clock(outDefault("duration")) + ": what is set here now is kept nowhere else.").then(function (ok) { if (ok) resetOutputNow(); });
   });
   function resetOutputNow() {
@@ -1446,8 +1450,9 @@
     $("odeSolver").dispatchEvent(new Event("change", { bubbles: true }));
     $("narDecode").value = "standard";                  // HERESY 1768: the whole-song decode
     $("narLong").value = "whole";                       // HERESY 2509: held to one window, never joined
+    $("debuzz").checked = true;                         // the 25 Hz buzz out
     paintOutput();
-    toast("Output reset: WAV 24-bit, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
+    toast("Output reset: WAV 24-bit, the 25 Hz buzz taken out, " + outDefault("steps") + " denoising steps, the AB2 solver, the songs up to " + clock(outDefault("duration")));
   }
 
   function readOutput() {
@@ -1471,6 +1476,7 @@
     }
     out.output_format = $("outFormat").value;
     if (out.output_format === "mp3") out.mp3_bitrate = parseInt($("mp3Bitrate").value, 10) || 128;
+    out.debuzz = $("debuzz").checked;                 // false keeps the decoder's peak-whole file; true is also the server's default
     return out;
   }
 
@@ -2718,6 +2724,7 @@
     if (typeof req.duration === "number") $("maxLength").value = round(req.duration, 3);
     $("variations").value = typeof req.synth_batch_size === "number" ? Math.max(1, Math.min(9, req.synth_batch_size)) : 1;
     if (FORMAT_LABELS[req.output_format]) $("outFormat").value = req.output_format;
+    if ($("debuzz")) $("debuzz").checked = req.debuzz !== false;   // absent, as an older take: the default, on
     if (typeof req.mp3_bitrate === "number" && $("mp3Bitrate").querySelector('option[value="' + req.mp3_bitrate + '"]')) {
       $("mp3Bitrate").value = String(req.mp3_bitrate);
     }
@@ -2747,7 +2754,7 @@
   // HERESY 1607, 1609: harmony and abc_continue among a prompt file's keys
   var PROMPT_KEYS = ["title", "style", "lyrics", "cot", "abc", "abc_continue", "lm_seed", "seed", "cfg_scale", "cfg_lyrics", "free_tempo", "vocal_octave", "harmony", "abc_sampling", "semantic_sampling",
     "vae", "solver", "nar_ladder", "nar_pieces", "sliders", "loras", "lora_groups", "plan_only", "semantic_tokens", "semantic_keep", "parent", "duration", "steps",
-    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "score_guard", "seconds", "instrumental"];
+    "lm_batch_size", "synth_batch_size", "output_format", "mp3_bitrate", "peak_clip", "debuzz", "score_guard", "seconds", "instrumental"];
   var GROUP_NAMES = { abc: "Score planner", semantic: "Music tokens" };
   function openNotes(req) {
     var notes = [], say = function (text) { notes.push(text); };
@@ -6176,6 +6183,7 @@
       cell("Realtime", "Realtime", take.render_seconds && take.seconds ? "\u00d7" + (take.seconds / take.render_seconds).toFixed(2) : "\u2014") +
       cell("Versions \u00d7 variations", "Versions x variations", (rq.lm_batch_size || 1) + " \u00d7 " + (rq.synth_batch_size || 1)) +
       cell("Score guard", "Score guard", tr(rq.score_guard === false ? "off" : "on"), "") +
+      cell("Debuzz", "Debuzz", rq.debuzz === false ? tr("off") : rq.debuzz === true ? tr("on") : "\u2014", "") +
       cell("Free tempo", "Free tempo", rq.free_tempo === true ? tr("on") : "\u2014", "") +   // HERESY 1416 («off» is Direct's name in the catalogs)
       cell("Sound decode", "Sound decode", rq.nar_ladder === true ? tr("Ladder · experimental") : "\u2014", "") +   // HERESY 1768
       cell("Long songs", "Long songs", rq.nar_pieces === true ? tr("Pieces · experimental") : "\u2014", "") +   // HERESY 2509
@@ -12168,6 +12176,7 @@
       nar_pieces: $("narLong").value === "pieces",                                                   // HERESY 2509
       synth_batch_size: parseInt($("variations").value, 10), lm_batch_size: parseInt($("versions").value, 10),
       output_format: $("outFormat").value, mp3_bitrate: parseInt($("mp3Bitrate").value, 10),
+      debuzz: $("debuzz").checked,
       vae: selectedVae(), sliders: STATE.sliderChoice || [], loras: YueLoras.kept ? YueLoras.kept() : YueLoras.value(),   // HERESY 1167: the muted kept
       lora_groups: YueLoras.groups ? YueLoras.groups() : []   // HERESY 1447
     };
@@ -12223,8 +12232,9 @@
   // A knob off its default is marked. The default is the value attribute: the page
   // already writes each knob's default there as its step base, so no second table
   // is kept. Only numbers, ranges and the solver: text and seeds have no default.
-  var MARKED = 'input[type="number"], input[type="range"], select#odeSolver, select#narDecode, select#narLong';   // HERESY 1768: the decode too; 2509: Long songs
+  var MARKED = 'input[type="number"], input[type="range"], select#odeSolver, select#narDecode, select#narLong, input#debuzz';   // HERESY 1768: the decode too; 2509: Long songs; the frame buzz
   function isChanged(el) {
+    if (el.type === "checkbox") return el.checked !== el.defaultChecked;
     if (el.tagName === "SELECT") {
       var base = 0;
       for (var i = 0; i < el.options.length; i++) if (el.options[i].defaultSelected) { base = i; break; }

@@ -141,6 +141,11 @@ struct Yue2Request {
     // audio output format: "mp3", "wav16", "wav24", "wav32"
     std::string output_format;
 
+    // The VAE's 25 Hz frame buzz out of the highs once the take is saved (lab/debuzz.py, strength 0.8).
+    // true: audio.wav and listen.flac are the cleaned take; audio.raw.wav keeps the decoder's peak-whole file.
+    // false: the take stays as the decoder wrote it. WAV only; an MP3 is left as encoded.
+    bool debuzz;  // true
+
     // MP3 encoder bitrate in kbps, used when output_format is "mp3".
     // WAV outputs ignore this field.
     int mp3_bitrate;  // 128

@@ -11,6 +11,8 @@ on Forge, next to it (Viktor 30.09.2026: «Считай всё на Големе
                                    after /synth, reseed while the word error is over the line (GET /gloss/gate?id=)
   POST /quality/loop {name, iterations}   sing again only the sections inspect_job flagged, a few times;
                                    a fault of the whole take names Debuzz or Remaster (GET /quality/loop?id=)
+  POST /meter/retry {name, lyrics, abc}   a lyric line's syllables against the vocal phrase; the sections
+                                   that miss are sung again (GET /meter/retry?id=)
   GET /gloss?name=TAKE&cached=1    only an earlier measurement, 204 if there is none yet (HERESY 2103; 404: no such take)
   GET /spectrum?name=TAKE          the take's spectrum (spectrum_job.py), its binary block when
                                    ready, {"status": …} with 202 while it is computed
@@ -183,6 +185,7 @@ sys.path.insert(0, str(HERE))
 import gloss_core  # noqa: E402
 import gloss_gate  # noqa: E402   after /synth: reseed while the word error is over the line
 import quality_loop  # noqa: E402   flagged sections sung again; a fault of the whole take names Debuzz or Remaster
+import meter_retry  # noqa: E402   syllables against the vocal phrase; a section that misses is sung again
 import collection  # noqa: E402   HERESY 1041
 import name_rule  # noqa: E402   HERESY 2462: one rule for every name
 import writer  # noqa: E402   HERESY 1047
@@ -861,6 +864,15 @@ def _loop_gloss(name):
 
 
 def _loop_redo(name, parts, lyrics):
+    return quality_loop.section_redo(name, parts, lyrics)
+
+
+def _meter_load(name):
+    req = json.load(open(take_dir(name) / "request.json", encoding="utf-8"))
+    return {"lyrics": req.get("lyrics") or "", "abc": req.get("abc") or "", "seconds": float(req.get("duration") or 180)}
+
+
+def _meter_redo(name, parts, lyrics):
     return quality_loop.section_redo(name, parts, lyrics)
 
 
@@ -4570,6 +4582,9 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/quality/loop":              # flagged sections sung again; GET ?id= follows the job
                 st = quality_loop.job(q.get("id", ""))
                 return self.send(200, st) if st else self.send(404, {"error": "no such quality-loop job"})
+            if url.path == "/meter/retry":               # syllables against the vocal phrase; GET ?id= follows the job
+                st = meter_retry.job(q.get("id", ""))
+                return self.send(200, st) if st else self.send(404, {"error": "no such meter-retry job"})
             if url.path == "/section/live":              # HERESY 1414: the sections being replaced
                 return self.send(200, {"live": section.live()})
             if url.path == "/section/job":               # HERESY 1425: one job as it stands, for the page to follow it to its takes
@@ -4855,6 +4870,10 @@ class Handler(BaseHTTPRequestHandler):
                     st = quality_loop.job(str(data.get("id") or ""))
                     return self.send(200, st or {"status": "cancelled"})
                 code, payload = quality_loop.begin(data, _loop_lyrics, _loop_inspect, _loop_redo, _loop_gloss)
+                return self.send(code, payload)
+            if url.path == "/meter/retry":               # {name, lyrics, abc}: sections whose syllables miss the melody
+                data = json.loads(body.decode("utf-8") or "{}")
+                code, payload = meter_retry.begin(data, _meter_load, _meter_redo)
                 return self.send(code, payload)
             if url.path == "/section/repeat":                # HERESY 1715: {name, a, b, lyrics, versions, section, abc}: a section sung once more
                 data = json.loads(body.decode("utf-8"))

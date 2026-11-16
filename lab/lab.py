@@ -9,6 +9,8 @@ on Forge, next to it (Viktor 30.09.2026: «Считай всё на Големе
                                    there, else {"status": "running" | "queued"} and a job starts
   POST /gloss/gate {…a /synth body, gloss_gate, gloss_threshold, gloss_attempts}
                                    after /synth, reseed while the word error is over the line (GET /gloss/gate?id=)
+  POST /quality/loop {name, iterations}   sing again only the sections inspect_job flagged, a few times;
+                                   a fault of the whole take names Debuzz or Remaster (GET /quality/loop?id=)
   GET /gloss?name=TAKE&cached=1    only an earlier measurement, 204 if there is none yet (HERESY 2103; 404: no such take)
   GET /spectrum?name=TAKE          the take's spectrum (spectrum_job.py), its binary block when
                                    ready, {"status": …} with 202 while it is computed
@@ -180,6 +182,7 @@ NEED_MB = 5000                     # large-v3 float16 with room for a 7-minute s
 sys.path.insert(0, str(HERE))
 import gloss_core  # noqa: E402
 import gloss_gate  # noqa: E402   after /synth: reseed while the word error is over the line
+import quality_loop  # noqa: E402   flagged sections sung again; a fault of the whole take names Debuzz or Remaster
 import collection  # noqa: E402   HERESY 1041
 import name_rule  # noqa: E402   HERESY 2462: one rule for every name
 import writer  # noqa: E402   HERESY 1047
@@ -829,6 +832,36 @@ def gloss_score(take, lyrics):
 
 
 api.gloss_score(gloss_score)
+
+
+def _loop_lyrics(name):
+    return json.load(open(take_dir(name) / "request.json", encoding="utf-8")).get("lyrics") or ""
+
+
+def _loop_inspect(name):
+    for _ in range(900):
+        r = inspect_async(name)
+        if r.get("status") in ("queued", "running"):
+            time.sleep(quality_loop.POLL)
+            continue
+        if r.get("status") == "failed":
+            raise RuntimeError(r.get("error") or "inspect failed")
+        return r
+    raise RuntimeError("inspect did not finish")
+
+
+def _loop_gloss(name):
+    cached = CACHE / f"{name}.gloss.json"
+    if not cached.is_file():
+        return None
+    try:
+        return json.load(open(cached, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _loop_redo(name, parts, lyrics):
+    return quality_loop.section_redo(name, parts, lyrics)
 
 
 def gloss_async(name, force=False, source=""):
@@ -4534,6 +4567,9 @@ class Handler(BaseHTTPRequestHandler):
                     gloss_gate.cancel(q.get("id", ""))
                 st = gloss_gate.job(q.get("id", ""))
                 return self.send(200, st) if st else self.send(404, {"error": "no such lyrics-gate job"})
+            if url.path == "/quality/loop":              # flagged sections sung again; GET ?id= follows the job
+                st = quality_loop.job(q.get("id", ""))
+                return self.send(200, st) if st else self.send(404, {"error": "no such quality-loop job"})
             if url.path == "/section/live":              # HERESY 1414: the sections being replaced
                 return self.send(200, {"live": section.live()})
             if url.path == "/section/job":               # HERESY 1425: one job as it stands, for the page to follow it to its takes
@@ -4812,6 +4848,14 @@ class Handler(BaseHTTPRequestHandler):
                 started = gloss_gate.start(gloss_gate.strip(data), gloss_score, gate["gloss_threshold"], gate["gloss_attempts"],
                                            engine=api._engine)
                 return self.send(202, {"id": started["id"]})
+            if url.path == "/quality/loop":              # {name, iterations}: the sections inspect flagged, sung again
+                data = json.loads(body.decode("utf-8") or "{}")
+                if data.get("cancel"):
+                    quality_loop.cancel(str(data.get("id") or ""))
+                    st = quality_loop.job(str(data.get("id") or ""))
+                    return self.send(200, st or {"status": "cancelled"})
+                code, payload = quality_loop.begin(data, _loop_lyrics, _loop_inspect, _loop_redo, _loop_gloss)
+                return self.send(code, payload)
             if url.path == "/section/repeat":                # HERESY 1715: {name, a, b, lyrics, versions, section, abc}: a section sung once more
                 data = json.loads(body.decode("utf-8"))
                 return self.send(202, section.repeat(data.get("name"), data.get("a"), data.get("b"), data.get("lyrics"),

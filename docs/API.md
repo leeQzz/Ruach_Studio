@@ -65,6 +65,10 @@ POST /api/v1/songs
 - `gloss_gate` (default off), `gloss_threshold` (0 to 1, default 0.35), `gloss_attempts` (1 to 8, default 3). With the gate on, the song is made, then Whisper's word error is measured (`lab/gloss_core.py`). Over the threshold, `lm_seed` is drawn again and the song is made again, up to that many attempts. The job's `takes` is the lowest error; `gloss_attempts` records each one (`n`, `lm_seed`, `job`, `take`, `wer`). The gate needs lyrics. Poll `GET /api/v1/jobs/ID` as for any other song: the id starts with `gg-`. A gated retry keeps `exclude_styles`, `debuzz`, and `nar_pieces`.
 - `workspace`: the take lands there when it is done. With the gate on, the take that was kept.
 
+### A take's flagged sections
+
+`POST /lab/quality/loop` with `{name, iterations}` (the page's lab, the same host, under `/lab`). The take is inspected (`lab/inspect_job.py`). A dropout, a run of clicks, or a line a gloss already marked is sung again, and only that section (`lab/section.py`), up to `iterations` times (2, at most 4). A fault of the whole take is not sung again: the VAE's frame buzz names Debuzz, clipping or mains hum names Remaster. The answer is `202 {id}`; `GET /lab/quality/loop?id=` is the job, each pass on it (`passes`), and `suggest` when a tool is named. The Console's Artifacts drawer has the same action.
+
 ### A melody as a MIDI file
 
 Each track with notes is one line: the first two become the score's **Vocal** (sung) and **Ins** (the instruments' melody), by their names when a track is called *vocal / voice / vox / melody / sing* or *ins / instr / accomp*, else in order. A line is one note at a time: of notes starting together the highest stays. The grid is a sixteenth; the meter and the tempo are the file's (4/4 and 120 when it has none). The key: `midi_key`, else the file's key signature, else the one its notes suggest (said in the answer as `key_from`).

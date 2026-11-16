@@ -191,5 +191,34 @@ check("prepare keeps the file beside the audio",
 check("prepare keeps a mode file, and a score in the request wins",
       training._track_score_fields(raw / "other.wav", {"scores": {"full": "K:D\n"}})["scores"] == {"melody": "M:4/4\n", "full": "K:D\n"})
 
+# After transcription refuses every track that was still open, the run stops instead of teaching Direct only.
+check("a run with no score left after transcription stops",
+      prompt.none_covered_reason("full", 4, 0) == prompt.direct_only_reason("full"))
+check("one score left is enough to train the mode", prompt.none_covered_reason("melody", 4, 1) is None)
+check("Direct does not ask this", prompt.none_covered_reason("off", 4, 0) is None)
+check("an empty set is not this refusal", prompt.none_covered_reason("full", 0, 0) is None)
+
+# A mix score does not cover the voice or the band. Separation still needs those sheets, or the transcriber.
+names = {"001_ruach.vocals.full.bf16.abc", "001_ruach.music.full.bf16.abc",
+         "002_ruach.vocals.full.bf16.abc", "002_ruach.music.full.bf16.abc.fail"}
+gaps = prompt.stem_scores_missing(
+    [{"stem": "001", "scores": {"full": "K:C\n"}}, {"stem": "002"}, {"stem": "004", "score": "X:1\n"}],
+    "full", names, "sheetsage2-bf16")
+check("a mix score leaves the stems missing until both sheets are written or refused", gaps == ["004"], gaps)
+covered_mix = prompt.score_coverage([{"stem": "001", "scores": {"full": "K:C\n"}}], "full", set(), set())
+blocked_stems = prompt.scores_block_reason(covered_mix, False, ["001"])
+check("separation without a transcriber is refused when a stem sheet is still open",
+      blocked_stems[0] == "transcriber" and "voice or band" in blocked_stems[1], blocked_stems)
+check("the same stems do not block once the transcriber can make them",
+      prompt.scores_block_reason(covered_mix, True, ["001"]) is None)
+check("stem sheets already settled do not ask for the transcriber",
+      prompt.scores_block_reason(covered_mix, False, []) is None)
+on_disk = training.stem_score_gaps(set_dir, "full", "sheetsage2-bf16")
+check("the prepared set's stem sheets are all still open", on_disk == ["001", "002", "003", "004"], on_disk)
+(cache / "001_ruach.vocals.full.bf16.abc").write_text("V:1\n", encoding="utf-8")
+(cache / "001_ruach.music.full.bf16.abc").write_text("V:1\n", encoding="utf-8")
+check("a track with both stem sheets drops out of the gaps",
+      training.stem_score_gaps(set_dir, "full", "sheetsage2-bf16") == ["002", "003", "004"])
+
 print("test_trainer_cot_prompt: " + ("all passed" if not bad else f"{len(bad)} FAILED"))
 sys.exit(1 if bad else 0)

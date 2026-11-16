@@ -159,23 +159,64 @@ def score_coverage(tracks, cot: str, sheets, fails) -> dict:
             "missing": missing, "refused": refused}
 
 
-def scores_block_reason(report: dict, transcriber_ready: bool):
+def direct_only_reason(cot: str) -> str:
+    return f"score mode {cot}: every track's score was refused, so the run would teach Direct only"
+
+
+def none_covered_reason(cot: str, n_tracks: int, n_with_score: int):
+    """After the sheets are written: None, or why a full or melody run must stop.
+
+    Some scores still teach the mode, and the tracks without one stay Direct. None at all would teach Direct only.
+    """
+    if cot not in ("full", "melody") or n_tracks <= 0 or n_with_score > 0:
+        return None
+    return direct_only_reason(cot)
+
+
+def stem_scores_missing(tracks, cot: str, names, transcriber: str = "sheetsage2") -> list:
+    """Tracks whose voice or band still has no sheet and no refusal.
+
+    A score kept on the mix does not stand in for either stem. names are the cache's filenames.
+    """
+    if cot not in ("full", "melody"):
+        raise ValueError(f"cot {cot!r}: full or melody")
+    names = set(names or ())
+    missing = []
+    for t in tracks or []:
+        stem = str((t or {}).get("stem"))
+        for variant in ("vocals", "music"):
+            fn = stem_sheet_filename(stem, variant, cot, transcriber)
+            if fn not in names and fn + ".fail" not in names:
+                missing.append(stem)
+                break
+    return missing
+
+
+def _needs_transcriber(cot: str, stems, what: str = "without one") -> str:
+    shown = ", ".join(stems[:8])
+    extra = f" and {len(stems) - 8} more" if len(stems) > 8 else ""
+    return (f"score mode {cot} needs a score for {len(stems)} track(s) {what} ({shown}{extra}) "
+            f"or the engine's transcriber (build/build/yue-transcribe and models/misc/SheetSage2-*.gguf)")
+
+
+def scores_block_reason(report: dict, transcriber_ready: bool, stem_missing=None):
     """None when a full or melody run may start. Else ("transcriber"|"scores", why).
 
     Tracks with a metadata score or a transcribed sheet are covered. Tracks still missing a score
     need the engine's transcriber. A set whose every track was refused would teach Direct only.
+    stem_missing: with separation, tracks whose voice or band sheet is still to be written. The mix's
+    score does not cover them, and making those sheets needs the transcriber too.
     """
     cot = report.get("cot") or "full"
     covered = int(report.get("metadata") or 0) + int(report.get("transcribed") or 0)
     missing = list(report.get("missing") or [])
+    stems = list(stem_missing or [])
     if int(report.get("tracks") or 0) and covered == 0 and not missing:
-        return ("scores", f"score mode {cot}: every track's score was refused, so the run would teach Direct only")
+        return ("scores", direct_only_reason(cot))
     if missing and not transcriber_ready:
-        shown = ", ".join(missing[:8])
-        extra = f" and {len(missing) - 8} more" if len(missing) > 8 else ""
-        return ("transcriber",
-                f"score mode {cot} needs a score for {len(missing)} track(s) without one ({shown}{extra}) "
-                f"or the engine's transcriber (build/build/yue-transcribe and models/misc/SheetSage2-*.gguf)")
+        return ("transcriber", _needs_transcriber(cot, missing))
+    if stems and not transcriber_ready:
+        return ("transcriber", _needs_transcriber(cot, stems, "whose voice or band has none"))
     return None
 
 

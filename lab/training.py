@@ -184,6 +184,19 @@ def score_report(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
     return P.score_coverage(tracks, cot, sheets, fails)
 
 
+def stem_score_gaps(set_dir, cot, transcriber="sheetsage2-bf16", tracks=None):
+    """Tracks whose voice or band sheet is still to be written. A score on the mix does not cover either stem."""
+    P = _trainer_prompt()
+    if cot not in ("full", "melody"):
+        return []
+    set_dir = Path(set_dir)
+    if tracks is None:
+        tracks = json.loads((set_dir / "dataset.json").read_text(encoding="utf-8")).get("tracks") or []
+    cache = set_dir / "_ruach_cache"
+    names = {p.name for p in cache.iterdir() if p.is_file()} if cache.is_dir() else set()
+    return P.stem_scores_missing(tracks, cot, names, transcriber)
+
+
 def score_counts(set_dir, tracks, transcriber):
     """Counts only: datasets() is polled, and a set's stem list does not belong in every answer."""
     out = {}
@@ -1403,16 +1416,19 @@ def train(kit, spec, gpu_picker, more_cards=None):
             # a score kept on the set, or a sheet already written, needs no transcriber; tracks still without either do
             rep = score_report(P["prepared"] / dataset, o["cot"], o["transcriber"])
             ready = (kit / "build" / "build" / "yue-transcribe").is_file() and bool(list(studio_paths.at(studio_paths.MISC, kit).glob("SheetSage2-*.gguf")))
-            blocked = _trainer_prompt().scores_block_reason(rep, ready)
+            # separation transcribes the voice and the band on their own; the mix's score does not cover either
+            stem_missing = stem_score_gaps(P["prepared"] / dataset, o["cot"], o["transcriber"]) if o["do_separation"] else []
+            blocked = _trainer_prompt().scores_block_reason(rep, ready, stem_missing)
             if blocked:
                 kind, why = blocked
                 if kind == "transcriber":
                     raise FileNotFoundError(why)
                 raise ValueError(why)
-            if rep["missing"] and o["transcriber"] == "refined" and not (studio_paths.at(studio_paths.MISC, kit) / "SheetSage2-Refined-F16.gguf").is_file():
+            if (rep["missing"] or stem_missing) and o["transcriber"] == "refined" and not (studio_paths.at(studio_paths.MISC, kit) / "SheetSage2-Refined-F16.gguf").is_file():
                 raise FileNotFoundError(f"SheetSage2-Refined is not installed: {studio_paths.MISC}/SheetSage2-Refined-F16.gguf")
             o["score_report"] = {"metadata": rep["metadata"], "transcribed": rep["transcribed"],
-                                 "missing": len(rep["missing"]), "refused": len(rep["refused"])}
+                                 "missing": len(rep["missing"]), "refused": len(rep["refused"]),
+                                 "stem_missing": len(stem_missing)}
         if o["do_separation"] and not (studio_paths.at(studio_paths.REFINER_SEPARATION, kit) / "roformer" / "model_bs_roformer_ep_317_sdr_12.9755.ckpt").is_file():
             raise FileNotFoundError(f"the separation needs the Studio's separator ({studio_paths.REFINER_SEPARATION}/roformer/model_bs_roformer_ep_317_sdr_12.9755.ckpt)")   # HERESY 1422
         ckpt, o["quant"], base = base_checkpoint(P, spec)   # HERESY 1792: a base the run names (a merge), else the Studio's own

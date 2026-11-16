@@ -58,7 +58,7 @@ import cache as latent_cache  # noqa: E402   (the name `cache` is the AR's KV ca
 from load import load_model  # noqa: E402
 from lora import inject, load_into, set_enabled, state_dict  # noqa: E402
 from model import ABC_END, ABC_START, CODEC_OFFSET, MUSIC_END, MUSIC_START  # noqa: E402
-from prompt import (build_prompt_ids, check_score_ids, parse_caption, score_text,  # noqa: E402
+from prompt import (build_prompt_ids, check_score_ids, none_covered_reason, parse_caption, score_text,  # noqa: E402
                     target_loss_mask, tokenizer_from_checkpoint)
 
 KIT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -430,6 +430,10 @@ def main():
             abcs[name] = torch.tensor(abc, dtype=torch.long)
             heads_cot[name] = torch.tensor(head, dtype=torch.long)
             abc_from[name] = src
+        # the transcriber may have refused every track that was still missing: that is Direct only, and it stops here
+        bare = none_covered_reason(cot, len(items), len(abcs))
+        if bare:
+            raise ValueError(bare)
         n_meta = sum(1 for src in abc_from.values() if src == "metadata")
         say(f"score mode {cot}: {len(abcs)} of {len(items)} tracks with a score" +
             (f" ({n_meta} kept on the set, {len(abcs) - n_meta} transcribed)" if abcs else "") +
